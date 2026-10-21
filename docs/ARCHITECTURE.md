@@ -2,11 +2,12 @@
 
 | | |
 |---|---|
-| **Versión** | 0.1 (propuesta para revisión) |
-| **Fecha** | 2026-10-19 |
+| **Versión** | 0.2 (propuesta para revisión) |
+| **Fecha** | 2026-10-21 |
 | **Estado** | Fase 0 — decisiones y diseño. **Todavía no hay código de producción.** |
 | **Red objetivo** | Polygon PoS (`chainId 137`) · pruebas en Polygon Amoy (`chainId 80002`) |
 | **Alcance** | Prototipo de venta primaria de un token ERC-20 a precio fijo en POL + panel público de estado y distribución |
+| **Cambios v0.2** | Docker-first (host solo con Docker), entornos DEV/PRE/PRO y convenciones de nombrado (archivos y código en inglés, documentación en español) |
 
 ---
 
@@ -15,6 +16,8 @@
 Un contrato `TokenSale` custodia el inventario del token, lo vende a precio fijo en **POL** (token nativo de Polygon, antes MATIC) y mantiene **toda la contabilidad on-chain**: tokens vendidos, restantes, POL recaudado, número de compradores y detalle por wallet.
 
 Una dApp **Next.js + wagmi/viem** lee ese estado directamente del contrato por RPC y firma las compras con la wallet del usuario. **Sin backend propio, sin custodia de claves y sin confiar en el cliente para el precio**: el contrato es la única fuente de verdad.
+
+Todo el toolchain (Foundry, Node/pnpm, Anvil, Caddy, PostgreSQL) se ejecuta en **contenedores**: el host solo necesita Docker y Compose (§8). El mismo stack se reproduce en el VPS de PRE y de PRO.
 
 ```
 Usuario ──firma──> Wallet ──tx──> TokenSale ──transfer──> Token ERC-20
@@ -74,7 +77,7 @@ Si los tokens están en la EOA del propietario, el contrato no puede venderlos s
 
 ### 1.6 Faltan en el alcance: reembolsos, límites, allowlist y legal
 
-No están definidos y cambian el contrato: ¿devoluciones?, ¿mínimo/máximo por wallet?, ¿venta abierta o allowlist/KYC?, ¿vesting?, ¿qué pasa con lo no vendido?, ¿quién puede retirar la recaudación? Se proponen defaults en §14.
+No están definidos y cambian el contrato: ¿devoluciones?, ¿mínimo/máximo por wallet?, ¿venta abierta o allowlist/KYC?, ¿vesting?, ¿qué pasa con lo no vendido?, ¿quién puede retirar la recaudación? Se proponen defaults en §15.
 
 ---
 
@@ -92,13 +95,17 @@ No están definidos y cambian el contrato: ¿devoluciones?, ¿mínimo/máximo po
 | **ADR-08** | Owner = **Safe multisig** en mainnet; EOA en Amoy | EOA también en mainnet | Reduce el riesgo de robo de clave y de “rug” accidental |
 | **ADR-09** | **Amoy primero**, mainnet después | Solo mainnet | Probar con POL ficticio y repetir el flujo completo |
 | **ADR-10** | **Sin upgradeabilidad y sin `delegatecall`** | Patrón proxy | Menos vectores; el contrato hace una sola cosa |
+| **ADR-11** | **Docker-first**: todo el toolchain en contenedores; el host solo necesita Docker + Compose | Instalar Foundry/Node en cada máquina | Paridad DEV/PRE/PRO, onboarding reproducible y traslado directo al VPS |
+| **ADR-12** | **Un proyecto Compose por entorno** (`dapp-pre`, `dapp-pro`) + edge compartido | Un único Compose con perfiles para todo | Aislamiento, despliegue y rollback independientes por entorno |
+| **ADR-13** | **Archivos y código en inglés; documentación en español** | Mezclar idiomas | Consistencia con el ecosistema, `grep` predecible y onboarding más rápido |
 
 ### Stack concreto
 
-- **Contratos:** Solidity `^0.8.24`, OpenZeppelin Contracts 5.x (`ERC20`, `Ownable2Step`, `Pausable`, `ReentrancyGuard`, `SafeERC20`, `Math.mulDiv`), Foundry (`forge`, `cast`, `anvil`).
+- **Contratos:** Solidity `^0.8.24`, OpenZeppelin Contracts 5.x (`ERC20`, `Ownable2Step`, `Pausable`, `ReentrancyGuard`, `SafeERC20`, `Math.mulDiv`), Foundry (`forge`, `cast`, `anvil`) **en contenedor**.
 - **Web:** Next.js 15 (App Router) + TypeScript, Tailwind + shadcn/ui, `wagmi` v2, `viem`, `@tanstack/react-query`, RainbowKit (o ConnectKit) para la conexión.
 - **Indexer (fase 4, opcional):** Ponder (viem + Postgres) o subgraph de The Graph.
-- **Hosting:** Vercel (web) + RPC de Alchemy/Infura/QuickNode con fallback público.
+- **Toolchain:** Docker + Docker Compose v2 como **única dependencia de host**; Foundry, Node 22, Caddy y PostgreSQL con versiones fijadas por digest.
+- **Hosting:** VPS Linux con Docker + Caddy (TLS automático); RPC de Alchemy/Infura/QuickNode con fallback público.
 - **Explorador:** Polygonscan (mainnet) y Amoy Polygonscan.
 
 ---
@@ -155,7 +162,7 @@ ERC-20 estándar con:
 - **Sin `mint` posterior** (suministro inmutable), sin `burn`, sin fees, sin `permit` (no hace falta).
 - Hereda de OpenZeppelin `ERC20`; no se toca la lógica de transferencias.
 
-> El despliegue emite el 100 % del suministro al deployer; el script transfiere el inventario al `TokenSale` en la misma transacción de despliegue (§8). Lo que no se venda se queda en el `TokenSale` hasta el barrido posterior al cierre.
+> El despliegue emite el 100 % del suministro al deployer; el script transfiere el inventario al `TokenSale` en la misma transacción de despliegue (§8.8). Lo que no se venda se queda en el `TokenSale` hasta el barrido posterior al cierre.
 
 ### 4.2 Estado del `TokenSale`
 
@@ -435,6 +442,7 @@ NEXT_PUBLIC_WC_PROJECT_ID=...
 
 - Direcciones y ABI en `web/lib/deployments.ts`, generadas desde `deployments/<chainId>.json`; **nunca** se aceptan direcciones por query string para operar.
 - La clave del RPC, si es de proveedor, se restringe por dominio en el panel del proveedor; nunca se asume secreta.
+- En DEV hay dos URLs distintas para el mismo Anvil: el navegador usa `http://localhost:8545` (puerto publicado) y los contenedores usan `http://anvil:8545` (DNS interno). No mezclarlas en una sola variable: `NEXT_PUBLIC_RPC_URL` es para el navegador.
 
 ### 6.6 Manejo de errores
 
@@ -514,44 +522,451 @@ Los errores se decodifican con el ABI (`decodeErrorResult`) para no mostrar mens
 
 ---
 
-## 8. Entornos y despliegue
+## 8. Contenedores y entornos (Docker-first)
 
-| Entorno | Red | chainId | Uso |
+> **Regla arquitectónica:** ninguna herramienta de desarrollo se instala en el host. El host solo necesita **Docker Engine + Docker Compose v2**. Foundry, Node/pnpm, Anvil, Caddy, PostgreSQL y Ponder se ejecutan en contenedores con versiones fijadas. El mismo stack se reproduce en el VPS sin reinstalar nada.
+
+Este cambio es estructural, no cosmético: la paridad entre desarrollo, PRE y PRO deja de depender de la memoria de cada persona y pasa a ser una propiedad del repositorio.
+
+### 8.1 Principios
+
+1. **Una sola dependencia de host:** Docker + Compose. `make` es opcional (solo envuelve comandos de Compose).
+2. **Versiones fijadas por digest**, nunca `latest` en PRE/PRO.
+3. **Mismo código, distinta configuración:** las diferencias entre entornos viven en `.env.*` y en los build args, nunca en ramas de código.
+4. **Imágenes multi-stage e inmutables:** sin toolchains de build en la imagen final; non-root en runtime.
+5. **Secretos fuera de la imagen y del repositorio:** `.env.*` en el host/VPS con `chmod 600`; Docker secrets para PRO.
+6. **Un proyecto Compose por entorno en el VPS** (`dapp-pre`, `dapp-pro`) y un **edge** compartido que hace de reverse proxy.
+7. **Nada de puertos publicados** salvo 80/443 en el edge; web y base de datos solo en redes internas.
+8. **El VPS de la web no custodia claves de despliegue ni claves del owner.**
+
+### 8.2 Matriz de entornos
+
+| | **DEV** | **PRE** | **PRO** |
 |---|---|---|---|
-| Local | Anvil | 31337 | Tests y desarrollo |
-| Testnet | Polygon Amoy | 80002 | E2E con POL ficticio |
-| Producción | Polygon PoS | 137 | Venta real |
+| Host | portátil | VPS | VPS |
+| Compose | `compose.yaml` + `compose.dev.yaml` | `compose.yaml` + `compose.pre.yaml` (+ edge) | `compose.yaml` + `compose.pro.yaml` (+ edge) |
+| Cadena | Anvil `31337` (fork Amoy opcional) | Amoy `80002` | Polygon PoS `137` |
+| Web | `next dev` con hot reload | imagen `web:pre` tras Caddy | imagen `web:pro` tras Caddy |
+| Contratos | `forge test` contra Anvil | desplegados y verificados en Amoy | desplegados y verificados en mainnet |
+| Owner | cuenta Anvil | EOA de prueba | Safe multisig |
+| URL | `http://localhost:3000` | `https://pre.<dominio>` | `https://app.<dominio>` |
+| Acceso | abierto | Basic Auth o allowlist IP | público |
+| Datos | efímeros | volumen desechable | backup diario |
+| Claves | `.env.dev` | `.env.pre` (`600`) | `.env.pro` (`600`) + secrets |
 
-### 8.1 Secuencia de despliegue (un solo script)
+PRE y PRO comparten host mientras el proyecto sea un prototipo. Para producción real se recomienda **VPS separados**: un fallo o un `docker compose down` en PRE no debe poder tumbar PRO.
+
+### 8.3 Inventario de contenedores
+
+| Servicio | Imagen / build | DEV | PRE | PRO | Notas |
+|---|---|---|---|---|---|
+| `contracts` | `contracts/Dockerfile` (Foundry fijado) | ✔ | one-shot | one-shot | tests, `cast` y scripts de despliegue; perfil `tools` |
+| `anvil` | misma imagen Foundry | ✔ | — | — | nodo local; `--fork-url` opcional |
+| `web` | `web/Dockerfile` | ✔ (`target: dev`) | ✔ | ✔ | Next.js `standalone` |
+| `edge` | `caddy:2-alpine` fijado | — | ✔ | ✔ | TLS automático y routing por dominio |
+| `db` | `postgres:16-alpine` fijado | opcional | fase 4 | fase 4 | solo red interna |
+| `indexer` | `docker/indexer/Dockerfile` (Ponder) | opcional | fase 4 | fase 4 | solo fase 4 |
+
+`contracts` y `anvil` usan el perfil de Compose `tools` para no arrancar por defecto en el VPS.
+
+### 8.4 Compose por entorno
+
+La composición es acumulativa: una **base** común y un **override** por entorno. La imagen se inyecta por variable (`WEB_IMAGE`) y solo DEV añade `build:`; así el VPS siempre hace `pull` y nunca compila.
+
+```yaml
+# compose.yaml — base común
+name: dapp-tk
+
+services:
+  web:
+    image: ${WEB_IMAGE:-dapp-tk-web:local}
+    expose:
+      - "3000"
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  internal:
+    driver: bridge
+```
+
+```yaml
+# compose.dev.yaml — desarrollo local
+services:
+  web:
+    build:
+      context: ./web
+      target: dev
+    env_file:
+      - .env.dev
+    command: pnpm dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+    environment:
+      WATCHPACK_POLLING: "true"
+
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:${FOUNDRY_VERSION:?set FOUNDRY_VERSION}
+    command: anvil --host 0.0.0.0 --chain-id 31337
+    ports:
+      - "8545:8545"
+
+volumes:
+  web_node_modules:
+```
+
+```yaml
+# compose.tools.yaml — trabajos one-shot (tests y despliegue)
+services:
+  contracts:
+    build:
+      context: ./contracts
+      args:
+        FOUNDRY_VERSION: ${FOUNDRY_VERSION:?set FOUNDRY_VERSION}
+    working_dir: /app
+    env_file:
+      - ${ENV_FILE:-.env.dev}
+    volumes:
+      - ./contracts:/app
+      - ./deployments:/app/deployments
+```
+
+```yaml
+# compose.pre.yaml — VPS, preproducción
+services:
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/<org>/dapp-tk-web:pre}
+    env_file:
+      - .env.pre
+    networks:
+      internal:
+      edge:
+        aliases:
+          - web-pre
+
+networks:
+  edge:
+    external: true
+```
+
+```yaml
+# compose.pro.yaml — VPS, producción
+services:
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/<org>/dapp-tk-web:pro}
+    env_file:
+      - .env.pro
+    networks:
+      internal:
+      edge:
+        aliases:
+          - web-pro
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+networks:
+  edge:
+    external: true
+```
+
+```yaml
+# compose.edge.yaml — un único reverse proxy por VPS
+name: dapp-edge
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    restart: unless-stopped
+
+networks:
+  edge:
+    name: edge
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:
+```
+
+`docker/Caddyfile` (TLS automático; PRE protegido con Basic Auth):
+
+```caddyfile
+{
+	email ops@example.com
+}
+
+pre.example.com {
+	basic_auth {
+		admin $2a$14$REPLACE_WITH_BCRYPT_HASH
+	}
+	reverse_proxy web-pre:3000
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+app.example.com {
+	reverse_proxy web-pro:3000
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+```
+
+### 8.5 Imágenes
+
+**Web** (`web/Dockerfile`, contexto `./web`): multi-stage `deps → dev → builder → runner`, Node 22 Alpine, pnpm por `corepack`, salida `standalone`, usuario non-root y healthcheck.
+
+```dockerfile
+# web/Dockerfile
+# syntax=docker/dockerfile:1.7
+FROM node:22-alpine AS base
+RUN corepack enable
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS dev
+COPY . .
+CMD ["pnpm", "dev"]
+
+FROM base AS builder
+ARG NEXT_PUBLIC_CHAIN_ID
+ARG NEXT_PUBLIC_SALE_ADDRESS
+ARG NEXT_PUBLIC_TOKEN_ADDRESS
+ARG NEXT_PUBLIC_RPC_URL
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN pnpm build
+
+FROM base AS runner
+ENV NODE_ENV=production
+RUN addgroup -S app && adduser -S app -G app
+COPY --from=builder --chown=app:app /app/.next/standalone ./
+COPY --from=builder --chown=app:app /app/.next/static ./.next/static
+COPY --from=builder --chown=app:app /app/public ./public
+USER app
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+> `next.config.ts` debe declarar `output: 'standalone'`. Las variables `NEXT_PUBLIC_*` **se incrustan en build**: PRE y PRO son dos builds del mismo commit (matriz de CI), no la misma imagen con distinto `.env`. Es el precio de no añadir un endpoint de configuración en runtime; para el prototipo es la opción más simple y explícita.
+
+**Contratos** (`contracts/Dockerfile`): imagen oficial de Foundry fijada por versión y digest, usuario no-root y caché de `solc` en volumen.
+
+```dockerfile
+# contracts/Dockerfile
+ARG FOUNDRY_VERSION
+FROM ghcr.io/foundry-rs/foundry:${FOUNDRY_VERSION}
+WORKDIR /app
+RUN useradd -m -u 1000 app && chown -R app:app /app
+USER app
+ENV SVM_HOME=/home/app/.svm
+```
+
+> `FOUNDRY_VERSION` admite la forma `v1.3.5@sha256:…`, que es la recomendada para PRE/PRO. Verificar con `docker buildx imagetools inspect` que la versión elegida publica `linux/amd64` **y** `linux/arm64` (portátil Apple + VPS x86). Si falta ARM, construir la imagen propia con `buildx` o usar emulación solo en DEV.
+
+### 8.6 Redes, volúmenes y permisos
+
+- **Redes:** `internal` por proyecto (bridge) + `edge` externa compartida solo por `caddy` y los `web`. La base de datos, si existe, nunca se conecta a `edge`.
+- **Puertos:** `web` solo `expose: 3000`; `db` sin `ports`; únicos puertos publicados `80/443` en el edge.
+- **Volúmenes:** `web_node_modules` (evita que el bind mount de DEV machaque las dependencias instaladas en la imagen), `caddy_data`/`caddy_config`, `pg_data` y caché de Foundry (`/home/app/.svm`).
+- **Bind mounts solo en DEV.** En PRE/PRO se usa la imagen inmutable; los datos van a volúmenes.
+- **UID/GID:** en el VPS, `user: "${UID:-1000}:${GID:-1000}"` y volúmenes con propietario correcto. En macOS Docker Desktop la emulación de permisos es laxa; no sirve como prueba de permisos de Linux.
+- **`no-new-privileges`, `read_only` donde se pueda y límites de CPU/memoria** en PRO.
+
+### 8.7 Secretos y claves
+
+| Secreto | Dónde vive | Dónde **no** vive |
+|---|---|---|
+| Clave del deployer | CI secret + `--keystore` montado en el contenedor one-shot | repositorio, imagen, VPS web |
+| Clave del owner | Safe multisig (firmantes con hardware wallet) | infraestructura |
+| RPC API key | `.env.pre`/`.env.pro` y restricción por dominio | `NEXT_PUBLIC_*` en claro sin restricción |
+| Password de Postgres | Docker secret | `compose.yaml` |
+| Hash de Basic Auth de PRE | `Caddyfile` (solo hash bcrypt) | texto plano |
+
+Reglas:
+
+- `.env.example` versionado **solo con nombres**; `.env.*` reales en `.gitignore` y `chmod 600`.
+- `NEXT_PUBLIC_*` es **público por definición** (acaba en el bundle). Nunca metas una clave secreta ahí. Si el proveedor de RPC no permite restringir por dominio, poner un proxy `/api/rpc` en el servidor Next y no exponer la clave.
+- En PRO, `docker secret` para todo lo sensible; en PRE, `.env` con permisos restringidos es suficiente.
+- Rotación documentada: RPC key, deployer key (nueva cuenta), password de Postgres.
+
+### 8.8 Despliegue de contratos (contenedor one-shot)
+
+El despliegue **no se ejecuta en el VPS de la web**. Se ejecuta desde el portátil del responsable o desde CI, con el stack `compose.tools.yaml` y el `.env` del entorno:
+
+```bash
+# tests
+ENV_FILE=.env.dev docker compose -f compose.tools.yaml run --rm contracts forge test -vvv
+
+# despliegue en Amoy (PRE)
+ENV_FILE=.env.pre docker compose -f compose.tools.yaml run --rm contracts \
+  forge script script/Deploy.s.sol --broadcast --verify
+
+# despliegue en Polygon mainnet (PRO) — requiere aprobación manual
+ENV_FILE=.env.pro docker compose -f compose.tools.yaml run --rm contracts \
+  forge script script/Deploy.s.sol --broadcast --verify
+```
+
+`ETH_RPC_URL` y `ETHERSCAN_API_KEY` se leen del `env_file` dentro del contenedor; no se expanden en el host.
+
+Secuencia (la misma de siempre, ahora containerizada):
 
 1. `SaleToken(initialSupply, deployer)` → suministro fijo emitido al deployer.
 2. `TokenSale(token, price, start, end, minTokens, maxPerWallet, owner)`.
 3. `token.transfer(sale, inventory)` → el contrato de venta recibe el inventario.
 4. Verificar ambos contratos en Polygonscan.
-5. Escribir `deployments/80002.json` con direcciones, bloque y hashes.
-6. (Mainnet) Transferir la ownership a la Safe **y verificar** que el owner es la Safe.
+5. Escribir `deployments/<chainId>.json` (volumen montado) y commitearlo/etiquetarlo.
+6. (Mainnet) Transferir la ownership a la Safe **y verificar** que `owner()` es la Safe.
+
+### 8.9 Despliegue de la web y CI/CD
+
+Flujo: **CI construye y publica en GHCR; el VPS solo hace `pull` y `up`.** Nunca se compila en PRO.
+
+| Pipeline | Disparo | Pasos | Puerta |
+|---|---|---|---|
+| `ci` | PR / push | `forge fmt --check`, `forge test`, lint, typecheck, `next build`, escaneo de imagen | obligatoria |
+| `images` | tag `v*` | buildx multi-arch y push `web:sha-<commit>`, `:pre`, `:pro` (dos builds por `NEXT_PUBLIC_*`) | — |
+| `deploy-pre` | tag o merge | `pull` + `up -d` en VPS PRE, smoke test HTTPS | automática |
+| `deploy-pro` | release manual | `pull` + `up -d` en VPS PRO | aprobación en GitHub Environments |
+| `deploy-contracts-pre` | manual | `forge script` en Amoy, publicar `deployments/80002.json` | aprobación |
+| `deploy-contracts-pro` | manual | `forge script` en mainnet + ownership a Safe | doble aprobación |
+
+En el VPS:
 
 ```bash
-forge script script/Deploy.s.sol \
-  --rpc-url "$POLYGON_AMOY_RPC_URL" \
-  --broadcast --verify --etherscan-api-key "$POLYGONSCAN_API_KEY"
+docker network create edge                                     # una vez
+docker compose -f compose.edge.yaml -p dapp-edge up -d          # una vez
+WEB_IMAGE=ghcr.io/<org>/dapp-tk-web:sha-<commit> \
+  docker compose -f compose.yaml -f compose.pre.yaml -p dapp-pre up -d
+WEB_IMAGE=ghcr.io/<org>/dapp-tk-web:sha-<commit> \
+  docker compose -f compose.yaml -f compose.pro.yaml -p dapp-pro up -d
 ```
 
-> Claves: `--keystore`/hardware wallet o variable de entorno en el CI. Nunca en el repo. `.env.example` solo con nombres.
+- **Rollback:** volver a poner el tag anterior en `WEB_IMAGE` y `up -d`. Sin rebuild.
+- **Zero-downtime:** aceptable un corte de segundos en el prototipo; si se exige, blue/green con dos servicios y conmutación en Caddy.
+- **Healthcheck:** `/api/health` responde 200 y el despliegue se considera fallido si no queda `healthy` en 60 s.
 
-### 8.2 Configuración de la web por entorno
+### 8.10 VPS: baseline, backups y monitorización
 
-- Preview/staging apunta a Amoy; producción a 137.
-- `NEXT_PUBLIC_*` se inyecta en build; un cambio de dirección exige rebuild (y eso es bueno: queda versionado).
-- Fallback de RPC configurado en `wagmi` (`fallback([...])`) con dos proveedores.
+**Sistema**
+
+- Ubuntu 24.04 LTS; Docker Engine 27+ y plugin Compose v2 (repositorio oficial).
+- Usuario `deploy` no-root en el grupo `docker`; SSH solo con clave; `PermitRootLogin no`.
+- UFW: 22, 80, 443. `fail2ban` y `unattended-upgrades` activos.
+- Nunca montar `/var/run/docker.sock` dentro de un contenedor.
+
+**Capacidad**
+
+- Web + edge: 2 vCPU / 2 GB / 40 GB es suficiente.
+- Con indexer + Postgres: 2 vCPU / 4 GB y backups diarios.
+
+**Backups**
+
+- `deployments/` versionado en git (fuente de verdad de direcciones).
+- `pg_dump` diario a almacenamiento externo (fase 4).
+- Volumen `caddy_data` (certificados) incluido en backup.
+- `.env.pro` en gestor de contraseñas, no solo en el VPS.
+
+**Monitorización**
+
+- Healthchecks de Compose + monitor externo de uptime (HTTPS y certificado).
+- Logs con `json-file` limitado (`max-size: 10m`, `max-file: 3`); Loki opcional.
+- Alertas on-chain: balance del `TokenSale`, evento `TokensPurchased`, cambios de owner/precio (Tenderly o similar).
+- Actualizaciones por PR (Renovate/Dependabot), con ventana y rollback; **sin Watchtower en PRO**.
+
+### 8.11 Excepciones conscientes
+
+- **Hardware wallet:** un Ledger no se pasa al contenedor. La firma con hardware wallet se hace con `cast` en un host endurecido o, preferiblemente, con `--keystore` en CI y aprobación manual. Es la única excepción documentada al “todo en Docker”.
+- **Rendimiento en macOS:** bind mounts y Anvil en contenedor son algo más lentos que en Linux; se mitiga con volúmenes nombrados y `WATCHPACK_POLLING`. No afecta a PRE/PRO.
+- **Build args públicos:** `NEXT_PUBLIC_*` obliga a dos builds (PRE y PRO) por release; se acepta para no añadir configuración en runtime.
 
 ---
 
-## 9. Estructura de repositorio propuesta
+## 9. Convenciones de nombrado
+
+> **Regla:** los **archivos, directorios, funciones, variables y tipos se nombran en inglés**. La **documentación se redacta en español**. El detalle y los ejemplos están en [`NAMING.md`](NAMING.md).
+
+| Ámbito | Regla | Ejemplo |
+|---|---|---|
+| Archivos y directorios | inglés, ASCII, `kebab-case` salvo las reglas específicas de abajo | `format-pol.ts`, `compose.pre.yaml`, `sale-panel/` |
+| Contratos Solidity | `PascalCase.sol` | `TokenSale.sol`, `SaleToken.sol` |
+| Tests Foundry | `<Contrato>.t.sol` | `TokenSale.t.sol`, `TokenSale.invariants.t.sol` |
+| Componentes React | `PascalCase.tsx` | `SalePanel.tsx`, `WalletLookup.tsx` |
+| Hooks | `use` + `PascalCase.ts` | `useSaleState.ts`, `useBuyTokens.ts` |
+| Utilidades | `kebab-case.ts` | `format-amount.ts`, `parse-address.ts` |
+| Variables y funciones | `camelCase` en inglés | `remainingTokens`, `buyTokens()` |
+| Tipos, structs, eventos, errores | `PascalCase` | `SaleState`, `TokensPurchased`, `SoldOut` |
+| Constantes | `UPPER_SNAKE_CASE` | `MAX_TOKENS_PER_WALLET` |
+| Variables privadas | `_` + `camelCase` | `_buyers`, `_isBuyer` |
+| Variables de entorno | `UPPER_SNAKE_CASE`, prefijo por ámbito | `NEXT_PUBLIC_CHAIN_ID`, `ETH_RPC_URL` |
+| Documentación | contenido español, **nombre de archivo inglés** | `ARCHITECTURE.md`, `NAMING.md` |
+| Git | ramas `feat/…`, `fix/…`; Conventional Commits en inglés | `feat/buy-flow` |
+| UI | textos en español, claves i18n en inglés | `sale.buyButton` |
+
+Prohibido en nombres de archivo o identificadores: acentos, `ñ`, espacios, guiones bajos arbitrarios y palabras en español (`venta`, `comprar`, `usuario`). En comentarios de código también se usa inglés; el español queda para documentación y textos de interfaz.
+
+**Aplicación automática:** ESLint `@typescript-eslint/naming-convention`, `forge fmt`, `solhint`, `cspell` (diccionario inglés + lista blanca para docs) y un script `scripts/check-file-names.sh` que falla en CI si aparece un nombre no conforme.
+
+> Renombrado aplicado en esta versión: `docs/ARQUITECTURA.md` → [`docs/ARCHITECTURE.md`](ARCHITECTURE.md).
+
+---
+
+## 10. Estructura de repositorio propuesta
 
 ```
 dapp-tk-basic/
-├── contracts/                    # Foundry
+├── compose.yaml                  # base común (imagen, redes, healthcheck)
+├── compose.dev.yaml              # DEV: anvil + web con hot reload
+├── compose.pre.yaml              # PRE: web contra Amoy detrás del edge
+├── compose.pro.yaml              # PRO: web contra mainnet, hardened
+├── compose.edge.yaml             # Caddy: TLS y routing por dominio
+├── compose.tools.yaml            # tests y despliegue one-shot
+├── Makefile
+├── .env.example
+├── .dockerignore
+├── contracts/
+│   ├── .dockerignore
+│   ├── Dockerfile
+│   ├── foundry.toml
 │   ├── src/
 │   │   ├── SaleToken.sol
 │   │   └── TokenSale.sol
@@ -559,44 +974,54 @@ dapp-tk-basic/
 │   │   ├── TokenSale.t.sol
 │   │   ├── TokenSale.fuzz.t.sol
 │   │   └── TokenSale.invariants.t.sol
-│   ├── script/Deploy.s.sol
-│   ├── foundry.toml
-│   └── .env.example
-├── web/                          # Next.js
+│   └── script/Deploy.s.sol
+├── web/
+│   ├── .dockerignore
+│   ├── Dockerfile
+│   ├── package.json
 │   ├── app/
-│   │   ├── page.tsx              # dashboard + compra
+│   │   ├── page.tsx
 │   │   ├── wallet/[address]/page.tsx
-│   │   └── admin/page.tsx        # fase 4
+│   │   └── admin/page.tsx
 │   ├── components/
-│   ├── lib/
-│   │   ├── chains.ts
-│   │   ├── contracts.ts          # ABI + direcciones
-│   │   └── format.ts
-│   └── .env.example
+│   └── lib/
+│       ├── chains.ts
+│       ├── contracts.ts
+│       └── format-amount.ts
+├── docker/
+│   └── Caddyfile
 ├── deployments/
 │   ├── 80002.json
 │   └── 137.json
 ├── docs/
-│   └── ARQUITECTURA.md
+│   ├── ARCHITECTURE.md
+│   └── NAMING.md
+├── scripts/
+│   └── check-file-names.sh
 └── README.md
 ```
 
-- La ABI se genera con `forge inspect TokenSale abi` (o `wagmi generate`) y se versiona.
-- `deployments/*.json` es la única fuente de direcciones; la web la importa en build.
+- **Nada se instala en el host:** `make test` ejecuta `forge` dentro del contenedor; `make dev` levanta Anvil y Next.js.
+- Cada contexto de build (`web/`, `contracts/`) lleva su propio `.dockerignore`: `node_modules`, `out/`, `cache/`, `.env*` y artefactos locales nunca entran en la imagen.
+- La ABI se genera con `docker compose -f compose.tools.yaml run --rm contracts forge inspect TokenSale abi` y se versiona.
+- `deployments/*.json` es la única fuente de direcciones; lo escribe el job de despliegue y se commitea/etiqueta.
+- `web/` y `contracts/` mantienen su propio `Dockerfile`; no hay toolchains en la imagen final de la web.
 
 ---
 
-## 10. Plan por fases y criterios de aceptación
+## 11. Plan por fases y criterios de aceptación
 
 | Fase | Alcance | Estimación | Criterio de aceptación |
 |---|---|---|---|
-| **0. Arquitectura** | Este documento + decisiones cerradas | 0,5–1 día | Revisión aprobada; §14 resuelto |
-| **1. Contratos** | `SaleToken`, `TokenSale`, tests, deploy Amoy | 2–3 días | `forge test` verde (unit + fuzz + invariantes); contratos verificados en Amoy; script reproducible |
-| **2. Dashboard** | Lectura de estado, métricas, consulta por wallet | 2 días | Datos coinciden con el contrato; < 3 s de carga; responsive; sin errores de consola |
-| **3. Compra E2E** | Formulario, simulación, firma, recibo, errores | 2–3 días | Compras de importe mínimo, normal y por encima del cap; red incorrecta; firma rechazada; agotado; totales conciliados a mano |
-| **4. Extras** | Indexer, admin, EUR, CSV, preparación de auditoría | 2–4 días | Indexer cuadra con on-chain; export CSV válido; revisión de seguridad hecha |
+| **0. Arquitectura** | Este documento + decisiones cerradas | 0,5–1 día | Revisión aprobada; §15 resuelto |
+| **1. Toolchain Docker** | `compose.*`, `Dockerfile`s, Makefile, CI base, “hola mundo” web + `forge test` en contenedor | 1–2 días | `make dev` y `make test` funcionan en una máquina limpia solo con Docker; imágenes construidas en CI |
+| **2. Contratos** | `SaleToken`, `TokenSale`, tests, deploy Amoy | 2–3 días | `forge test` verde (unit + fuzz + invariantes); contratos verificados en Amoy; script reproducible |
+| **3. Dashboard** | Lectura de estado, métricas, consulta por wallet | 2 días | Datos coinciden con el contrato; < 3 s de carga; responsive; sin errores de consola |
+| **4. Compra E2E** | Formulario, simulación, firma, recibo, errores | 2–3 días | Compras de importe mínimo, normal y por encima del cap; red incorrecta; firma rechazada; agotado; totales conciliados a mano |
+| **5. Despliegue PRE/PRO** | VPS, edge, TLS, secretos, pipelines, smoke tests | 1–2 días | PRE en Amoy accesible por HTTPS y PRO en mainnet con owner = Safe; rollback probado |
+| **6. Extras** | Indexer, admin, EUR, CSV, preparación de auditoría | 2–4 días | Indexer cuadra con on-chain; export CSV válido; revisión de seguridad hecha |
 
-**Total prototipo en Amoy: ~7–12 días de desarrollo.**
+**Total prototipo en Amoy: ~9–13 días de desarrollo.**
 
 ### Fuera de alcance (explícito)
 
@@ -604,7 +1029,7 @@ Pago con tarjeta/fiat, KYC/AML, preventa con allowlist, vesting, reembolsos, mer
 
 ---
 
-## 11. Riesgos y aspectos legales
+## 12. Riesgos y aspectos legales
 
 ### 11.1 Riesgos técnicos
 
@@ -616,6 +1041,11 @@ Pago con tarjeta/fiat, KYC/AML, preventa con allowlist, vesting, reembolsos, mer
 | Precio fijo vs volatilidad de POL | El “valor” en EUR se mueve | Mostrar estimación y avisar; o precio referenciado con oráculo en una fase posterior |
 | Enumeración on-chain costosa | Dashboard lento con miles de compradores | Paginación + indexer |
 | Web comprometida | Phishing | CSP, dependencias fijadas, dominio, verificación |
+| Deriva entre local y VPS | Funciona en DEV y falla en PRE | Imágenes fijadas por digest + CI que construye exactamente lo que se despliega |
+| Arquitectura de imagen incorrecta | El contenedor no arranca en el VPS (ARM vs x86) | `buildx` multi-arch y verificación en CI |
+| Secreto filtrado en imagen o logs | Robo de clave | `.dockerignore`, sin secretos en `ARG`, Docker secrets y revisión de logs |
+| Certificado TLS caducado | Web inaccesible | Renovación automática de Caddy + alerta de expiración |
+| Disco lleno por logs o Postgres | Caída del VPS | Límites de log, backups y alerta de disco |
 
 ### 11.2 Legal (no es asesoría jurídica)
 
@@ -627,7 +1057,7 @@ Pago con tarjeta/fiat, KYC/AML, preventa con allowlist, vesting, reembolsos, mer
 
 ---
 
-## 12. Glosario rápido
+## 13. Glosario rápido
 
 | Término | Significado |
 |---|---|
@@ -640,20 +1070,29 @@ Pago con tarjeta/fiat, KYC/AML, preventa con allowlist, vesting, reembolsos, mer
 | **Checksum** | Codificación de mayúsculas/minúsculas que detecta direcciones mal escritas. |
 | **CEI** | Checks-Effects-Interactions, patrón anti-reentrancy. |
 | **Safe** | Multisig estándar en Ethereum/Polygon. |
+| **DEV / PRE / PRO** | Desarrollo local / preproducción (Amoy) / producción (mainnet). |
+| **Compose** | Docker Compose: define y ejecuta stacks multi-contenedor. |
+| **Edge** | Reverse proxy único que termina TLS y enruta por dominio. |
+| **GHCR** | GitHub Container Registry: registro de imágenes. |
+| **Digest** | Hash inmutable de una imagen (`@sha256:…`). |
+| **Caddy** | Servidor web y reverse proxy con TLS automático. |
 
 ---
 
-## 13. Qué se decide con este documento
+## 14. Qué se decide con este documento
 
 1. El contrato de venta es la **fuente de verdad** del estado y la contabilidad.
 2. El **inventario vive en el contrato**, no en la wallet del propietario.
 3. La compra **siempre la firma la wallet conectada**; teclear una dirección solo consulta o designa destino.
 4. **Sin backend** hasta que el volumen o el histórico lo justifiquen.
 5. **Amoy primero**, mainnet solo tras checklist y revisión.
+6. **Docker-first:** el host solo tiene Docker; todo el toolchain vive en imágenes fijadas.
+7. **PRE y PRO son proyectos Compose independientes** sobre el mismo repositorio.
+8. **Código en inglés, documentación en español.**
 
 ---
 
-## 14. Decisiones abiertas (responder o aceptar los defaults)
+## 15. Decisiones abiertas (responder o aceptar los defaults)
 
 | # | Pregunta | Default propuesto |
 |---|---|---|
@@ -667,5 +1106,10 @@ Pago con tarjeta/fiat, KYC/AML, preventa con allowlist, vesting, reembolsos, mer
 | D8 | ¿Indexer desde el inicio? | **No**, fase 4 |
 | D9 | ¿Mostrar EUR? | Solo estimación informativa, sin oráculo |
 | D10 | ¿Reembolsos / vesting / allowlist? | **Ninguno** en el prototipo |
+| D11 | ¿Registro de imágenes? | **GHCR** (`ghcr.io/<org>/dapp-tk-web`) |
+| D12 | ¿Dominios de PRE y PRO? | `pre.<dominio>` y `app.<dominio>` |
+| D13 | ¿Un VPS o dos? | **Uno** para el prototipo; separar PRO antes de producción real |
+| D14 | ¿Basic Auth en PRE? | **Sí**, además de allowlist opcional |
+| D15 | ¿Versiones fijadas? | Node 22 LTS, Foundry y Caddy por digest; Renovate para actualizarlas |
 
-Con los defaults aceptados se puede pasar a la Fase 1 (contratos y tests) sin más preguntas.
+Con los defaults aceptados se puede pasar a la Fase 1 (toolchain Docker) sin más preguntas.
