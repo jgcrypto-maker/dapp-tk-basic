@@ -146,6 +146,8 @@ Criterios de aceptación del entorno:
 4. ≥ 20 GiB libres en disco.
 5. Rosetta activa si se va a probar `linux/amd64`.
 
+> Docker Desktop no arranca solo al iniciar sesión: si `docker info` falla, ejecutar `open -a Docker` y esperar a que el daemon responda (unos 20–40 s) antes de lanzar `make`.
+
 ---
 
 ## 9. Cómo volver a medir
@@ -168,3 +170,4 @@ Registrar el resultado aquí con una fila nueva en el historial (§10) cuando ca
 | Fecha | Cambio |
 |---|---|
 | 2026-10-30 | Medición inicial del host, limpieza del proyecto huérfano `dapp-basic-tk` y verificación de que no hay toolchain de desarrollo instalado. |
+| 2026-10-30 | Fase 1 verificada en el host: imágenes `web` y `contracts` construidas, `make up` (Anvil `31337` + web 200), `make test` con 3 tests en verde y `fmt --check` limpio. Docker Desktop hubo que arrancarlo manualmente tras el reinicio de la sesión. |

@@ -1,0 +1,43 @@
+# Development override: local chain + Next.js with hot reload.
+# Usage: docker compose -f compose.yaml -f compose.dev.yaml up
+services:
+  web:
+    # Separate tag from the production image so `make build-web` is not overwritten by DEV builds.
+    image: ${WEB_IMAGE_DEV:-dapp-tk-web:dev}
+    build:
+      context: ./web
+      target: dev
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914}
+    command: pnpm dev
+    restart: "no"
+    env_file:
+      - path: .env.dev
+        required: false
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+    environment:
+      WATCHPACK_POLLING: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:${FOUNDRY_VERSION:-v1.5.1@sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e}
+    entrypoint: ["anvil"]
+    command: ["--host", "0.0.0.0", "--chain-id", "31337"]
+    restart: "no"
+    ports:
+      - "127.0.0.1:8545:8545"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "cast", "block-number", "--rpc-url", "http://127.0.0.1:8545"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  web_node_modules:

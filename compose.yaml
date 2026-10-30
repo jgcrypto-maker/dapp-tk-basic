@@ -1,0 +1,22 @@
+# Base compose file — shared by every environment.
+# DEV adds compose.dev.yaml (build + hot reload); PRE/PRO land in phase 5.
+name: dapp-tk
+
+services:
+  web:
+    image: ${WEB_IMAGE:-dapp-tk-web:local}
+    expose:
+      - "3000"
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  internal:
+    driver: bridge

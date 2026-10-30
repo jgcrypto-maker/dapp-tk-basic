@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  naming:
+    name: Naming rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check file names
+        run: ./scripts/check-file-names.sh
+
+  compose:
+    name: Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose files
+        run: |
+          docker compose -f compose.yaml -f compose.dev.yaml config --quiet
+          docker compose -f compose.yaml -f compose.tools.yaml config --quiet
+
+  contracts:
+    name: Contracts (forge)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build contracts image
+        run: docker build -t dapp-tk-contracts:ci ./contracts
+      - name: Check formatting
+        run: docker run --rm -v "$PWD/contracts:/app" -w /app dapp-tk-contracts:ci fmt --check
+      - name: Run tests
+        run: docker run --rm -v "$PWD/contracts:/app" -w /app dapp-tk-contracts:ci test -vvv
+
+  web:
+    name: Web (next)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Build
+        run: pnpm build
+      - name: Build production image
+        working-directory: .
+        run: docker build --target runner -t dapp-tk-web:ci ./web

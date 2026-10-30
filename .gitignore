@@ -1,0 +1,26 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+cache/
+broadcast/
+coverage/
+*.tsbuildinfo
+
+# Environment files (keep the template)
+.env
+.env.*
+!.env.example
+
+# Tooling
+.DS_Store
+*.log
+pnpm-debug.log*
+
+# Foundry local artifacts
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# buildx local state
+.buildx/
