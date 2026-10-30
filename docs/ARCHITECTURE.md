@@ -2,13 +2,14 @@
 
 | | |
 |---|---|
-| **Versión** | 0.3 |
+| **Versión** | 0.4 |
 | **Fecha** | 2026-10-30 |
-| **Estado** | Fase 0 cerrada — decisiones, diseño y **entorno local verificado** (§8.12). **Todavía no hay código de producción.** |
+| **Estado** | Fase 1 completada — toolchain Docker verificado (Anvil, Next.js y Foundry en contenedores). Sin contratos de venta ni dashboard todavía. |
 | **Red objetivo** | Polygon PoS (`chainId 137`) · pruebas en Polygon Amoy (`chainId 80002`) |
 | **Alcance** | Prototipo de venta primaria de un token ERC-20 a precio fijo en POL + panel público de estado y distribución |
 | **Cambios v0.2** | Docker-first (host solo con Docker), entornos DEV/PRE/PRO y convenciones de nombrado (archivos y código en inglés, documentación en español) |
 | **Cambios v0.3** | §8.12: entorno local medido (Docker 29.9.1, Compose 5.6.0, `make` 3.81, 8 GiB para la VM, 44 GiB libres) y limpieza de residuos; nuevo [`ENVIRONMENT.md`](ENVIRONMENT.md); D15 actualizado con las versiones reales |
+| **Cambios v0.4** | Fase 1 implementada: `compose*.yaml`, Dockerfiles con digest, `Makefile` compatible con 3.81, CI base y smoke tests; árbol de repositorio anotado con lo que existe y lo que queda por fase |
 
 ---
 
@@ -1033,6 +1034,9 @@ dapp-tk-basic/
 - `deployments/*.json` es la única fuente de direcciones; lo escribe el job de despliegue y se commitea/etiqueta.
 - `web/` y `contracts/` mantienen su propio `Dockerfile`; no hay toolchains en la imagen final de la web.
 
+- **Implementado en la Fase 1 (2026-10-30):** `compose.yaml`, `compose.dev.yaml`, `compose.tools.yaml`, `Makefile`, `.env.example`, `.dockerignore`, `contracts/{Dockerfile,foundry.toml,src/Smoke.sol,test/Toolchain.t.sol}`, `web/{Dockerfile,package.json,pnpm-lock.yaml,app/}`, `scripts/check-file-names.sh` y `.github/workflows/ci.yml`. Verificado en local: `make dev` (web 200 + Anvil `31337`), `make test` (3 tests), `fmt --check` y build de las imágenes `web:local` y `contracts:local`.
+- **Pendiente por fase:** `compose.pre.yaml`, `compose.pro.yaml`, `compose.edge.yaml` y `docker/Caddyfile` (fase 5); `SaleToken`/`TokenSale`, `Deploy.s.sol` y `deployments/*.json` (fase 2); rutas `wallet/[address]`, `admin` y `lib/*` de la web (fases 3–4).
+
 ---
 
 ## 11. Plan por fases y criterios de aceptación
@@ -1048,6 +1052,8 @@ dapp-tk-basic/
 | **6. Extras** | Indexer, admin, EUR, CSV, preparación de auditoría | 2–4 días | Indexer cuadra con on-chain; export CSV válido; revisión de seguridad hecha |
 
 **Total prototipo en Amoy: ~9–13 días de desarrollo.**
+
+**Estado a 2026-10-30:** fases 0 y 1 completadas (arquitectura, entorno verificado y toolchain Docker funcionando). Siguiente: fase 2 (contratos).
 
 ### Fuera de alcance (explícito)
 
