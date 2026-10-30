@@ -2,14 +2,15 @@
 
 | | |
 |---|---|
-| **Versión** | 0.4 |
+| **Versión** | 0.5 |
 | **Fecha** | 2026-10-30 |
-| **Estado** | Fase 1 completada — toolchain Docker verificado (Anvil, Next.js y Foundry en contenedores). Sin contratos de venta ni dashboard todavía. |
+| **Estado** | Fase 1 completada y **decisiones de la §15 cerradas** (2026-10-30). Fase 2 lista para Amoy. Sin contratos de venta ni dashboard todavía. |
 | **Red objetivo** | Polygon PoS (`chainId 137`) · pruebas en Polygon Amoy (`chainId 80002`) |
 | **Alcance** | Prototipo de venta primaria de un token ERC-20 a precio fijo en POL + panel público de estado y distribución |
 | **Cambios v0.2** | Docker-first (host solo con Docker), entornos DEV/PRE/PRO y convenciones de nombrado (archivos y código en inglés, documentación en español) |
 | **Cambios v0.3** | §8.12: entorno local medido (Docker 29.9.1, Compose 5.6.0, `make` 3.81, 8 GiB para la VM, 44 GiB libres) y limpieza de residuos; nuevo [`ENVIRONMENT.md`](ENVIRONMENT.md); D15 actualizado con las versiones reales |
 | **Cambios v0.4** | Fase 1 implementada: `compose*.yaml`, Dockerfiles con digest, `Makefile` compatible con 3.81, CI base y smoke tests; árbol de repositorio anotado con lo que existe y lo que queda por fase |
+| **Cambios v0.5** | §15 cerrada: D1–D15 aceptadas con valores concretos (precio 0,01 POL/TK con tope 0,05; límites en tokens 1.000/100.000; Amoy como red de pruebas); §11 actualizado |
 
 ---
 
@@ -79,7 +80,7 @@ Si los tokens están en la EOA del propietario, el contrato no puede venderlos s
 
 ### 1.6 Faltan en el alcance: reembolsos, límites, allowlist y legal
 
-No están definidos y cambian el contrato: ¿devoluciones?, ¿mínimo/máximo por wallet?, ¿venta abierta o allowlist/KYC?, ¿vesting?, ¿qué pasa con lo no vendido?, ¿quién puede retirar la recaudación? Se proponen defaults en §15.
+No están definidos y cambian el contrato: ¿devoluciones?, ¿mínimo/máximo por wallet?, ¿venta abierta o allowlist/KYC?, ¿vesting?, ¿qué pasa con lo no vendido?, ¿quién puede retirar la recaudación? Quedan cerrados en §15.
 
 ---
 
@@ -1053,7 +1054,7 @@ dapp-tk-basic/
 
 **Total prototipo en Amoy: ~9–13 días de desarrollo.**
 
-**Estado a 2026-10-30:** fases 0 y 1 completadas (arquitectura, entorno verificado y toolchain Docker funcionando). Siguiente: fase 2 (contratos).
+**Estado a 2026-10-30:** fases 0 y 1 completadas (arquitectura, entorno verificado y toolchain Docker funcionando) y §15 cerrada. Siguiente: fase 2 (contratos) contra Amoy.
 
 ### Fuera de alcance (explícito)
 
@@ -1125,24 +1126,34 @@ Pago con tarjeta/fiat, KYC/AML, preventa con allowlist, vesting, reembolsos, mer
 
 ---
 
-## 15. Decisiones abiertas (responder o aceptar los defaults)
+## 15. Decisiones cerradas (2026-10-30)
 
-| # | Pregunta | Default propuesto |
-|---|---|---|
-| D1 | ¿Token nuevo o existente? | **Nuevo ERC-20**, 18 decimales, 1.000.000 TK de ejemplo |
-| D2 | ¿Precio y moneda de liquidación? | **0,01 POL/TK** (ejemplo), configurable con tope |
-| D3 | ¿Qué significa “distribución”? | **A: ventas de esta DApp**; B/C con indexer en fase 4 |
-| D4 | ¿Límites de compra? | Mínimo 10 POL, máximo 1.000 POL por wallet |
-| D5 | ¿Ventana de venta? | Inicio inmediato, cierre a 30 días |
-| D6 | ¿Red? | **Amoy** para el prototipo; mainnet después |
-| D7 | ¿Quién es el owner? | EOA en Amoy; **Safe** en mainnet |
-| D8 | ¿Indexer desde el inicio? | **No**, fase 4 |
-| D9 | ¿Mostrar EUR? | Solo estimación informativa, sin oráculo |
-| D10 | ¿Reembolsos / vesting / allowlist? | **Ninguno** en el prototipo |
-| D11 | ¿Registro de imágenes? | **GHCR** (`ghcr.io/<org>/dapp-tk-web`) |
-| D12 | ¿Dominios de PRE y PRO? | `pre.<dominio>` y `app.<dominio>` |
-| D13 | ¿Un VPS o dos? | **Uno** para el prototipo; separar PRO antes de producción real |
-| D14 | ¿Basic Auth en PRE? | **Sí**, además de allowlist opcional |
-| D15 | ¿Versiones fijadas? | **Docker Engine 29.9.1 + Compose 5.6.0 + buildx 0.38.0** (host verificado, §8.12); Node 22 LTS, Foundry y Caddy por digest; Renovate para actualizarlas |
+Todas las preguntas de la v0.4 quedan aceptadas con los valores de abajo. Esta tabla sustituye a la lista de decisiones abiertas: la Fase 2 se implementa directamente contra ella.
 
-Con los defaults aceptados se puede pasar a la Fase 1 (toolchain Docker) sin más preguntas.
+| # | Decisión | Valor aceptado | Dónde se aplica |
+|---|---|---|---|
+| D1 | Token | **Nuevo ERC-20** `SaleToken`, 18 decimales, 1.000.000 TK | `SaleToken.sol`, constructor |
+| D2 | Precio | **0,01 POL/TK** (`1e16` wei), mutable por el owner con **tope 0,05 POL/TK** (`5e16` wei) | `pricePerTokenWei`, `MAX_PRICE_PER_TOKEN_WEI`, `setPrice` |
+| D3 | “Distribución” | **A: ventas de esta DApp**; B/C con indexer en fase 4 | `tokensPurchasedBy`, `getBuyers` |
+| D4 | Límites | **En unidades de token**: mínimo **1.000 TK**, máximo **100.000 TK por wallet** (equivalen a 10 POL y 1.000 POL al precio inicial) | `minTokensPerPurchase`, `maxTokensPerWallet` |
+| D5 | Ventana | **Inicio en el despliegue, 30 días** de duración | `startTime`, `endTime` |
+| D6 | Red | **Polygon Amoy (`80002`)** para el prototipo; mainnet tras checklist | `script/Deploy.s.sol`, `deployments/80002.json` |
+| D7 | Owner | **EOA** en Amoy (`Ownable2Step`); **Safe** en mainnet | constructor + `transferOwnership` |
+| D8 | Indexer | **No** hasta fase 4 | — |
+| D9 | EUR | Solo estimación informativa, sin oráculo | fase 3 (UI) |
+| D10 | Reembolsos / vesting / allowlist | **Ninguno** | alcance del contrato |
+| D11 | Registro de imágenes | **GHCR** (`ghcr.io/<org>/dapp-tk-web`) | fase 5 |
+| D12 | Dominios | `pre.<dominio>` y `app.<dominio>` | fase 5 |
+| D13 | VPS | **Uno** para el prototipo | fase 5 |
+| D14 | Basic Auth en PRE | **Sí** | fase 5 |
+| D15 | Versiones | Docker 29.9.1 / Compose 5.6.0 / buildx 0.38.0; Node 22; Foundry v1.5.1; OpenZeppelin 5.x; Renovate | imágenes y CI |
+
+**Precisiones respecto a los defaults de la v0.4** (huecos detectados al planificar la Fase 2):
+
+- **D2**: el default decía “configurable con tope” sin cifra. Se fija el tope en **5× el precio inicial** (`0,05 POL/TK`): protege de un cambio accidental o malicioso sin impedir ajustes razonables.
+- **D4**: el default estaba en POL, pero el contrato valida en tokens. Se fija en **unidades de token** para que el límite no cambie al mover el precio; la UI mostrará el equivalente en POL.
+- **D3** ya estaba implícita en ADR-04: se confirma que el contrato es el libro contable y no se añade indexer.
+
+**Decisiones que la Fase 2 asume del diseño de la §4.3:** `buyFor` (comprar para otra wallet), `sweepUnsold` (retirar lo no vendido tras el cierre), `withdrawProceeds` (retirar la recaudación) y pausa por el owner.
+
+**Despliegue en Amoy:** el broadcast real necesita una clave con POL de prueba y un RPC de Amoy (p. ej. `https://polygon-amoy-bor-rpc.publicnode.com`). Sin esas credenciales, la Fase 2 se valida con `forge test` y una simulación contra Anvil; el script queda listo para el broadcast cuando el owner lo autorice.

@@ -5,10 +5,11 @@ Prototipo de DApp sobre **Polygon** para:
 1. **Comprar** un token ERC-20 pagando con **POL** (token nativo de Polygon).
 2. **Consultar** el estado de la venta y cuántos tokens se han distribuido entre wallets.
 
-> **Estado actual: Fase 1 completada — toolchain Docker.** Anvil, Next.js y Foundry
-> arrancan y se prueban en contenedores; todavía no hay contratos de venta ni dashboard.
-> La especificación está en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) y el host medido
-> en [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
+> **Estado actual: Fase 1 completada y decisiones de la §15 cerradas.** El toolchain Docker
+> funciona y la Fase 2 (contratos en Amoy) queda lista para arrancar; todavía no hay
+> contratos de venta ni dashboard. La especificación está en
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) y el host medido en
+> [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
 ## Idea en una frase
 
@@ -79,5 +80,7 @@ Versiones fijadas: Foundry `v1.5.1`, Node 22 (`22.23.4`), pnpm `12.16.1`, Next.j
 ## Siguiente paso
 
 **Fase 2 — contratos**: `SaleToken` y `TokenSale` con OpenZeppelin 5.x, tests unitarios,
-fuzz e invariantes, y despliegue reproducible en Amoy. El smoke test y `Smoke.sol` se
+fuzz e invariantes, y despliegue reproducible en **Polygon Amoy**. Las decisiones de la
+§15 ya están cerradas: precio 0,01 POL/TK con tope 0,05, límites de 1.000/100.000 TK por
+wallet, ventana de 30 días y sin allowlist ni reembolsos. El smoke test y `Smoke.sol` se
 sustituyen por los contratos reales.
