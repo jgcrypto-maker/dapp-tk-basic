@@ -2,12 +2,13 @@
 
 | | |
 |---|---|
-| **Versión** | 0.2 (propuesta para revisión) |
-| **Fecha** | 2026-10-21 |
-| **Estado** | Fase 0 — decisiones y diseño. **Todavía no hay código de producción.** |
+| **Versión** | 0.3 |
+| **Fecha** | 2026-10-30 |
+| **Estado** | Fase 0 cerrada — decisiones, diseño y **entorno local verificado** (§8.12). **Todavía no hay código de producción.** |
 | **Red objetivo** | Polygon PoS (`chainId 137`) · pruebas en Polygon Amoy (`chainId 80002`) |
 | **Alcance** | Prototipo de venta primaria de un token ERC-20 a precio fijo en POL + panel público de estado y distribución |
 | **Cambios v0.2** | Docker-first (host solo con Docker), entornos DEV/PRE/PRO y convenciones de nombrado (archivos y código en inglés, documentación en español) |
+| **Cambios v0.3** | §8.12: entorno local medido (Docker 29.9.1, Compose 5.6.0, `make` 3.81, 8 GiB para la VM, 44 GiB libres) y limpieza de residuos; nuevo [`ENVIRONMENT.md`](ENVIRONMENT.md); D15 actualizado con las versiones reales |
 
 ---
 
@@ -104,7 +105,7 @@ No están definidos y cambian el contrato: ¿devoluciones?, ¿mínimo/máximo po
 - **Contratos:** Solidity `^0.8.24`, OpenZeppelin Contracts 5.x (`ERC20`, `Ownable2Step`, `Pausable`, `ReentrancyGuard`, `SafeERC20`, `Math.mulDiv`), Foundry (`forge`, `cast`, `anvil`) **en contenedor**.
 - **Web:** Next.js 15 (App Router) + TypeScript, Tailwind + shadcn/ui, `wagmi` v2, `viem`, `@tanstack/react-query`, RainbowKit (o ConnectKit) para la conexión.
 - **Indexer (fase 4, opcional):** Ponder (viem + Postgres) o subgraph de The Graph.
-- **Toolchain:** Docker + Docker Compose v2 como **única dependencia de host**; Foundry, Node 22, Caddy y PostgreSQL con versiones fijadas por digest.
+- **Toolchain:** Docker Engine + plugin Compose como **única dependencia de host** (medido: Engine 29.9.1, Compose 5.6.0, buildx 0.38.0); Foundry, Node 22, Caddy y PostgreSQL con versiones fijadas por digest.
 - **Hosting:** VPS Linux con Docker + Caddy (TLS automático); RPC de Alchemy/Infura/QuickNode con fallback público.
 - **Explorador:** Polygonscan (mainnet) y Amoy Polygonscan.
 
@@ -524,13 +525,13 @@ Los errores se decodifican con el ABI (`decodeErrorResult`) para no mostrar mens
 
 ## 8. Contenedores y entornos (Docker-first)
 
-> **Regla arquitectónica:** ninguna herramienta de desarrollo se instala en el host. El host solo necesita **Docker Engine + Docker Compose v2**. Foundry, Node/pnpm, Anvil, Caddy, PostgreSQL y Ponder se ejecutan en contenedores con versiones fijadas. El mismo stack se reproduce en el VPS sin reinstalar nada.
+> **Regla arquitectónica:** ninguna herramienta de desarrollo se instala en el host. El host solo necesita **Docker Engine + plugin Compose** (medido en el host de referencia: Engine 29.9.1, Compose 5.6.0, buildx 0.38.0). Foundry, Node/pnpm, Anvil, Caddy, PostgreSQL y Ponder se ejecutan en contenedores con versiones fijadas. El mismo stack se reproduce en el VPS sin reinstalar nada.
 
 Este cambio es estructural, no cosmético: la paridad entre desarrollo, PRE y PRO deja de depender de la memoria de cada persona y pasa a ser una propiedad del repositorio.
 
 ### 8.1 Principios
 
-1. **Una sola dependencia de host:** Docker + Compose. `make` es opcional (solo envuelve comandos de Compose).
+1. **Una sola dependencia de host:** Docker + plugin Compose. `make` es opcional (solo envuelve comandos de Compose) y en macOS es **3.81**, así que el `Makefile` no puede usar características de GNU Make 4 (§8.12).
 2. **Versiones fijadas por digest**, nunca `latest` en PRE/PRO.
 3. **Mismo código, distinta configuración:** las diferencias entre entornos viven en `.env.*` y en los build args, nunca en ramas de código.
 4. **Imágenes multi-stage e inmutables:** sin toolchains de build en la imagen final; non-root en runtime.
@@ -889,7 +890,7 @@ WEB_IMAGE=ghcr.io/<org>/dapp-tk-web:sha-<commit> \
 
 **Sistema**
 
-- Ubuntu 24.04 LTS; Docker Engine 27+ y plugin Compose v2 (repositorio oficial).
+- Ubuntu 24.04 LTS; Docker Engine 27+ y plugin Compose (repositorio oficial). El host de desarrollo validó el stack con Engine 29.9.1 y Compose 5.6.0 (§8.12); en PRE/PRO se fija la misma pareja mayor.
 - Usuario `deploy` no-root en el grupo `docker`; SSH solo con clave; `PermitRootLogin no`.
 - UFW: 22, 80, 443. `fail2ban` y `unattended-upgrades` activos.
 - Nunca montar `/var/run/docker.sock` dentro de un contenedor.
@@ -918,6 +919,30 @@ WEB_IMAGE=ghcr.io/<org>/dapp-tk-web:sha-<commit> \
 - **Hardware wallet:** un Ledger no se pasa al contenedor. La firma con hardware wallet se hace con `cast` en un host endurecido o, preferiblemente, con `--keystore` en CI y aprobación manual. Es la única excepción documentada al “todo en Docker”.
 - **Rendimiento en macOS:** bind mounts y Anvil en contenedor son algo más lentos que en Linux; se mitiga con volúmenes nombrados y `WATCHPACK_POLLING`. No afecta a PRE/PRO.
 - **Build args públicos:** `NEXT_PUBLIC_*` obliga a dos builds (PRE y PRO) por release; se acepta para no añadir configuración en runtime.
+
+### 8.12 Entorno local verificado (2026-10-30)
+
+Medición del host de desarrollo antes de arrancar la Fase 1. El detalle completo, las restricciones derivadas y el checklist de verificación están en [`ENVIRONMENT.md`](ENVIRONMENT.md).
+
+| Elemento | Valor medido | Implicación |
+|---|---|---|
+| Máquina | MacBook Pro M1, macOS 26.7.1, 8 vCPU, 16 GiB RAM | ARM64 nativo; `linux/amd64` solo por Rosetta |
+| Docker | Engine 29.9.1 · Desktop 4.96.0 · buildx 0.38.0 · BuildKit 0.34.0 | Compatible con `dockerfile:1.7` y builds multi-arch |
+| Compose | **v5.6.0** (plugin) | La v0.2 citaba “v2”; el fichero sigue siendo `compose.yaml` y la sintaxis no cambia |
+| VM de Docker | 8 vCPU · 8 GiB · overlayfs | Techo real de memoria para builds concurrentes |
+| Toolchain de host | `git` 2.50.1, `make` **3.81**, `jq`, `curl`; **sin** node/pnpm/forge/caddy/psql | Cumple ADR-11; `Makefile` compatible con 3.81 |
+| Disco | 228 GiB, **44 GiB libres** (78 % usado) | Recurso más ajustado; no acumular tags ni caché |
+| Red | GHCR y Docker Hub accesibles; SSH a GitHub OK como `josegalindo-it` | Sin configuración extra para construir y desplegar |
+
+**Estado del motor tras la limpieza:** 0 contenedores, 0 imágenes, 0 volúmenes y 0 caché de build; puertos `3000` y `8545` libres. Se eliminó un proyecto Compose huérfano (`dapp-basic-tk`) levantado desde una ruta inexistente, que ocupaba ambos puertos y consumía 4,88 GB de imágenes y caché.
+
+**Reglas que se derivan y aplican desde ya:**
+
+1. `make` debe funcionar con GNU Make 3.81 (sin `--output-sync`, `.ONESHELL`, `$(file …)` ni `!=`); si se necesita algo moderno, se ejecuta `make` dentro del contenedor `tools`.
+2. Un solo build pesado a la vez en DEV (8 GiB de VM); `pnpm install`, `next build` y `forge build` no se lanzan en paralelo en local.
+3. DEV construye `linux/arm64` por defecto; `linux/amd64` se reserva para verificar paridad con el VPS.
+4. Mantener ≥ 20 GiB libres y una etiqueta por imagen; `docker builder prune` tras cambios grandes de dependencias.
+5. Cada proyecto Compose lleva `name:` explícito y se baja con `docker compose -p <proyecto> down --volumes` al terminar, para no repetir el caso de contenedores huérfanos.
 
 ---
 
@@ -995,6 +1020,7 @@ dapp-tk-basic/
 │   └── 137.json
 ├── docs/
 │   ├── ARCHITECTURE.md
+│   ├── ENVIRONMENT.md
 │   └── NAMING.md
 ├── scripts/
 │   └── check-file-names.sh
@@ -1046,6 +1072,7 @@ Pago con tarjeta/fiat, KYC/AML, preventa con allowlist, vesting, reembolsos, mer
 | Secreto filtrado en imagen o logs | Robo de clave | `.dockerignore`, sin secretos en `ARG`, Docker secrets y revisión de logs |
 | Certificado TLS caducado | Web inaccesible | Renovación automática de Caddy + alerta de expiración |
 | Disco lleno por logs o Postgres | Caída del VPS | Límites de log, backups y alerta de disco |
+| Disco del portátil al límite (44 GiB libres) | Builds fallidos o Docker sin espacio | Una etiqueta por imagen, `builder prune` periódico, alerta por debajo de 20 GiB |
 
 ### 11.2 Legal (no es asesoría jurídica)
 
@@ -1110,6 +1137,6 @@ Pago con tarjeta/fiat, KYC/AML, preventa con allowlist, vesting, reembolsos, mer
 | D12 | ¿Dominios de PRE y PRO? | `pre.<dominio>` y `app.<dominio>` |
 | D13 | ¿Un VPS o dos? | **Uno** para el prototipo; separar PRO antes de producción real |
 | D14 | ¿Basic Auth en PRE? | **Sí**, además de allowlist opcional |
-| D15 | ¿Versiones fijadas? | Node 22 LTS, Foundry y Caddy por digest; Renovate para actualizarlas |
+| D15 | ¿Versiones fijadas? | **Docker Engine 29.9.1 + Compose 5.6.0 + buildx 0.38.0** (host verificado, §8.12); Node 22 LTS, Foundry y Caddy por digest; Renovate para actualizarlas |
 
 Con los defaults aceptados se puede pasar a la Fase 1 (toolchain Docker) sin más preguntas.
