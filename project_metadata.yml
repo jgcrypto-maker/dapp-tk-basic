@@ -10,7 +10,7 @@ visibility: private
 description: Ejemplo básico de tokenización con el empleo de una dApp
 category: blockchain-tools
 status: active
-language: python
+language: solidity
 
 created: "2026-11-14"
 updated: "2026-11-16"
@@ -25,7 +25,10 @@ git_identity:
 tags:
   - git
   - blockchain
-  - python
+  - solidity
+  - typescript
+  - foundry
+  - docker
   - cross-platform
 
 # git remote add origin git@{ssh_alias}:{github_owner}/{repository}.git
