@@ -1,0 +1,31 @@
+# =====================================================
+# PROJECT METADATA — Git Repository Manager
+# =====================================================
+repository: dapp-tk-basic
+provider: github
+ssh_alias: github-jgcrypto
+github_owner: jgcrypto-maker
+visibility: private
+
+description: Ejemplo básico de tokenización con el empleo de una dApp
+category: blockchain-tools
+status: active
+language: python
+
+created: "2026-11-14"
+updated: "2026-11-16"
+
+default_branch: main
+remote_name: origin
+
+git_identity:
+  name: Jose Galindo
+  email: 338003521+jgcrypto-maker@users.noreply.github.com
+
+tags:
+  - git
+  - blockchain
+  - python
+  - cross-platform
+
+# git remote add origin git@{ssh_alias}:{github_owner}/{repository}.git
