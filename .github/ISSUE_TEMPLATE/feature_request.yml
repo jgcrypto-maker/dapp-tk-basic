@@ -1,0 +1,61 @@
+name: Propuesta
+description: Nueva funcionalidad o mejora
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de proponer, revisa `docs/ARCHITECTURE.md` y las decisiones cerradas de la §15:
+        puede que el tema ya esté resuelto o fuera de alcance.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options:
+        - contracts
+        - web
+        - docker / compose
+        - ci
+        - docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+      description: Qué falta y a quién afecta.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta
+      description: Solución planteada, alternativas consideradas e impacto en fases.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Fase relacionada
+      options:
+        - "0-1: arquitectura y toolchain"
+        - "2: contratos"
+        - "3: dashboard"
+        - "4: compra E2E"
+        - "5: PRE/PRO"
+        - "6: extras"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmaciones
+      options:
+        - label: No propongo cambios de alcance sin actualizar `ARCHITECTURE.md`.
+          required: true

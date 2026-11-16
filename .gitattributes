@@ -1,0 +1,23 @@
+# Normaliza finales de línea en Windows y marca artefactos generados.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff2 binary
+
+# Generados: no revisar en diffs
+pnpm-lock.yaml linguist-generated=true
+contracts/out/** linguist-generated=true
+web/.next/** linguist-generated=true
+
+# Documentación y dependencias
+docs/** linguist-documentation
+contracts/lib/** linguist-vendored
+
+# Lenguajes
+*.sol linguist-language=Solidity
+*.t.sol linguist-language=Solidity

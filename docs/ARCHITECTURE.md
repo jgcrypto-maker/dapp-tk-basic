@@ -2,15 +2,16 @@
 
 | | |
 |---|---|
-| **Versión** | 0.5 |
-| **Fecha** | 2026-10-30 |
-| **Estado** | Fase 1 completada y **decisiones de la §15 cerradas** (2026-10-30). Fase 2 lista para Amoy. Sin contratos de venta ni dashboard todavía. |
+| **Versión** | 0.6 |
+| **Fecha** | 2026-10-30 (rev. 2026-11-16) |
+| **Estado** | Fase 1 completada y decisiones de la §15 cerradas. Repositorio organizado para alojamiento privado en GitHub. Fase 2 lista para Amoy. |
 | **Red objetivo** | Polygon PoS (`chainId 137`) · pruebas en Polygon Amoy (`chainId 80002`) |
 | **Alcance** | Prototipo de venta primaria de un token ERC-20 a precio fijo en POL + panel público de estado y distribución |
 | **Cambios v0.2** | Docker-first (host solo con Docker), entornos DEV/PRE/PRO y convenciones de nombrado (archivos y código en inglés, documentación en español) |
 | **Cambios v0.3** | §8.12: entorno local medido (Docker 29.9.1, Compose 5.6.0, `make` 3.81, 8 GiB para la VM, 44 GiB libres) y limpieza de residuos; nuevo [`ENVIRONMENT.md`](ENVIRONMENT.md); D15 actualizado con las versiones reales |
 | **Cambios v0.4** | Fase 1 implementada: `compose*.yaml`, Dockerfiles con digest, `Makefile` compatible con 3.81, CI base y smoke tests; árbol de repositorio anotado con lo que existe y lo que queda por fase |
 | **Cambios v0.5** | §15 cerrada: D1–D15 aceptadas con valores concretos (precio 0,01 POL/TK con tope 0,05; límites en tokens 1.000/100.000; Amoy como red de pruebas); §11 actualizado |
+| **Cambios v0.6** | Organización del repositorio: `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, plantillas de issue/PR, `CODEOWNERS`, Dependabot, `.editorconfig`/`.gitattributes` y verificación de enlaces en CI |
 
 ---
 
@@ -990,6 +991,7 @@ dapp-tk-basic/
 ├── Makefile
 ├── .env.example
 ├── .dockerignore
+├── .gitignore
 ├── contracts/
 │   ├── .dockerignore
 │   ├── Dockerfile
@@ -1021,12 +1023,28 @@ dapp-tk-basic/
 │   ├── 80002.json
 │   └── 137.json
 ├── docs/
+│   ├── README.md
 │   ├── ARCHITECTURE.md
 │   ├── ENVIRONMENT.md
 │   └── NAMING.md
 ├── scripts/
-│   └── check-file-names.sh
-└── README.md
+│   ├── check-file-names.sh
+│   └── check-links.sh
+├── .github/
+│   ├── workflows/ci.yml
+│   ├── ISSUE_TEMPLATE/
+│   ├── CODEOWNERS
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── dependabot.yml
+├── README.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+├── CODE_OF_CONDUCT.md
+├── LICENSE
+├── .editorconfig
+├── .gitattributes
+└── .nvmrc
 ```
 
 - **Nada se instala en el host:** `make test` ejecuta `forge` dentro del contenedor; `make dev` levanta Anvil y Next.js.
@@ -1036,6 +1054,7 @@ dapp-tk-basic/
 - `web/` y `contracts/` mantienen su propio `Dockerfile`; no hay toolchains en la imagen final de la web.
 
 - **Implementado en la Fase 1 (2026-10-30):** `compose.yaml`, `compose.dev.yaml`, `compose.tools.yaml`, `Makefile`, `.env.example`, `.dockerignore`, `contracts/{Dockerfile,foundry.toml,src/Smoke.sol,test/Toolchain.t.sol}`, `web/{Dockerfile,package.json,pnpm-lock.yaml,app/}`, `scripts/check-file-names.sh` y `.github/workflows/ci.yml`. Verificado en local: `make dev` (web 200 + Anvil `31337`), `make test` (3 tests), `fmt --check` y build de las imágenes `web:local` y `contracts:local`.
+- **Organización del repositorio (2026-11-16):** gobernanza (`LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`), plantillas de issue y PR, `CODEOWNERS`, Dependabot, `.editorconfig`/`.gitattributes` y `scripts/check-links.sh` integrado en `make check` y en CI.
 - **Pendiente por fase:** `compose.pre.yaml`, `compose.pro.yaml`, `compose.edge.yaml` y `docker/Caddyfile` (fase 5); `SaleToken`/`TokenSale`, `Deploy.s.sol` y `deployments/*.json` (fase 2); rutas `wallet/[address]`, `admin` y `lib/*` de la web (fases 3–4).
 
 ---

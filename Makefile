@@ -16,7 +16,8 @@ WEB_IMAGE ?= dapp-tk-web:local
 CONTRACTS_IMAGE ?= dapp-tk-contracts:local
 export FOUNDRY_VERSION NODE_IMAGE WEB_IMAGE CONTRACTS_IMAGE
 
-.PHONY: help doctor env dev up down logs ps test fmt fmt-check build-web build-contracts clean
+.PHONY: help doctor env dev up down logs ps test fmt fmt-check build-web build-contracts clean \
+	naming docs-links compose-check check
 
 help: ## Show this help
 	@echo "dapp-tk-basic — make targets"
@@ -31,6 +32,10 @@ help: ## Show this help
 	@echo "  make test             Run forge test in the contracts container"
 	@echo "  make fmt              Format Solidity with forge fmt"
 	@echo "  make fmt-check        Check Solidity formatting (CI)"
+	@echo "  make naming           Check file names against docs/NAMING.md"
+	@echo "  make docs-links       Check internal documentation links"
+	@echo "  make compose-check    Validate the Compose files"
+	@echo "  make check            Run naming, docs links, compose and fmt checks"
 	@echo "  make build-web        Build the production web image (runner stage)"
 	@echo "  make build-contracts  Build the contracts image"
 	@echo "  make clean            Stop DEV and drop its volumes"
@@ -72,6 +77,18 @@ fmt-check: ## Check Solidity formatting
 
 build-contracts: ## Build the contracts image
 	$(COMPOSE) $(TOOLS) build contracts
+
+naming: ## Check file names against docs/NAMING.md
+	./scripts/check-file-names.sh
+
+docs-links: ## Check internal documentation links
+	./scripts/check-links.sh
+
+compose-check: ## Validate the Compose files
+	$(COMPOSE) $(DEV) config --quiet
+	$(COMPOSE) $(TOOLS) config --quiet
+
+check: naming docs-links compose-check fmt-check ## Run all static checks
 
 build-web: ## Build the production web image
 	docker build --target runner -t $(WEB_IMAGE) ./web

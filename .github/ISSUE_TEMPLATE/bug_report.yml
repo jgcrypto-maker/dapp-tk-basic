@@ -1,0 +1,70 @@
+name: Bug
+description: Algo no funciona como se espera
+title: "fix: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por el reporte. **No incluyas secretos, claves privadas ni datos personales.**
+        Si es un problema de seguridad, usa el canal privado de `SECURITY.md`.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afectada
+      options:
+        - contracts
+        - web
+        - docker / compose
+        - ci
+        - docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción
+      description: Qué ocurre y qué esperabas que ocurriera.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1. make up
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit o versión
+      description: Salida de `git rev-parse --short HEAD`.
+      placeholder: d7c7a7f
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs relevantes
+      description: Salida de `docker compose logs` o del navegador. Sin secretos.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmaciones
+      options:
+        - label: He revisado que no hay secretos en este reporte.
+          required: true
+        - label: He comprobado que no es un problema de seguridad (en ese caso, canal privado).
+          required: true

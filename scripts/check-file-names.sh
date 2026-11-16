@@ -29,6 +29,8 @@ while IFS= read -r path; do
     for part in "${parts[@]}"; do
       case "$part" in
         ""|"."|"..") continue ;;
+        # GitHub imposes this uppercase directory name; it is a framework exception.
+        "ISSUE_TEMPLATE") continue ;;
       esac
       if printf '%s' "$part" | LC_ALL=C grep -q '[^a-z0-9._-]'; then
         report "$path" "directorio no conforme: $part"
