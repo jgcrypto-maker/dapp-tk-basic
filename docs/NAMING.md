@@ -24,7 +24,7 @@ Regla general: **inglés, ASCII, sin espacios, sin acentos y sin `ñ`**.
 | Despliegues | `<chainId>.json` | `deployments/80002.json`, `deployments/137.json` | `deployments/amoy.json` |
 | Scripts | `kebab-case.sh` | `check-file-names.sh` | `comprobarNombres.sh` |
 
-**Excepciones obligatorias del framework** (no se renombran): `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`, `route.ts`, `middleware.ts`, `next.config.ts`. También se permiten `README.md`, `LICENSE`, `Dockerfile`, `Makefile`, `.gitignore`, `.dockerignore` y los lockfiles.
+**Excepciones obligatorias del framework** (no se renombran): `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`, `route.ts`, `middleware.ts`, `next.config.ts`. También se permiten `README.md`, `LICENSE`, `Dockerfile`, `Makefile`, `.gitignore`, `.dockerignore`, `.editorconfig`, `.gitattributes`, `.nvmrc`, `CODEOWNERS`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `PULL_REQUEST_TEMPLATE.md`, el directorio `.github/ISSUE_TEMPLATE/` y los lockfiles.
 
 ---
 

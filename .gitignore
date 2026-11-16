@@ -24,3 +24,10 @@ contracts/broadcast/
 
 # buildx local state
 .buildx/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.history/

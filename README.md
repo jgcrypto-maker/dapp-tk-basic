@@ -1,67 +1,84 @@
 # dapp-tk-basic
 
-Prototipo de DApp sobre **Polygon** para:
+[![CI](https://github.com/josegalindo-it/dapp-tk-basic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/josegalindo-it/dapp-tk-basic/actions/workflows/ci.yml)
+[![Estado](https://img.shields.io/badge/estado-fase%201%20%C2%B7%20toolchain-blue)](#estado)
+[![Red](https://img.shields.io/badge/red-Polygon%20Amoy%2080002-8247e5)](https://amoy.polygonscan.com)
+[![Licencia](https://img.shields.io/badge/licencia-propietaria-lightgrey)](LICENSE)
 
-1. **Comprar** un token ERC-20 pagando con **POL** (token nativo de Polygon).
-2. **Consultar** el estado de la venta y cuántos tokens se han distribuido entre wallets.
+Prototipo de DApp sobre **Polygon** para vender un token **ERC-20** a precio fijo en **POL**
+y consultar el estado de la venta: tokens vendidos, restantes, POL recaudado y detalle por
+wallet.
 
-> **Estado actual: Fase 1 completada y decisiones de la §15 cerradas.** El toolchain Docker
-> funciona y la Fase 2 (contratos en Amoy) queda lista para arrancar; todavía no hay
-> contratos de venta ni dashboard. La especificación está en
-> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) y el host medido en
-> [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
+Un contrato `TokenSale` custodia el inventario, aplica precio y límites on-chain y mantiene
+toda la contabilidad. La dApp Next.js lee ese estado por RPC y firma las compras con la
+wallet del usuario: sin backend propio, sin custodia de claves y sin confiar en el cliente
+para el precio.
 
-## Idea en una frase
+> **Repositorio privado y propietario.** Consulta [`LICENSE`](LICENSE). No se concede
+> licencia de uso, copia ni distribución.
 
-Un contrato `TokenSale` custodia el inventario del token, lo vende a precio fijo en POL y
-mantiene la contabilidad on-chain (vendido, restante, recaudado, compradores). Una dApp
-Next.js + wagmi/viem lee ese estado por RPC y firma las compras con la wallet del usuario,
-sin backend propio y sin custodiar claves.
+## Estado
+
+| Fase | Estado | Entrega |
+|---|---|---|
+| 0 · Arquitectura | ✅ Cerrada | [ARCHITECTURE.md](docs/ARCHITECTURE.md) v0.5 y decisiones §15 cerradas |
+| 1 · Toolchain Docker | ✅ Cerrada | Compose, Dockerfiles, Makefile y CI funcionando |
+| 2 · Contratos | ⏭️ Siguiente | `SaleToken`, `TokenSale`, tests y despliegue en Amoy |
+| 3 · Dashboard | ⬜ Pendiente | Lectura de estado y consulta por wallet |
+| 4 · Compra E2E | ⬜ Pendiente | Formulario, simulación, firma y recibo |
+| 5 · PRE/PRO | ⬜ Pendiente | VPS, edge, TLS y pipelines |
+| 6 · Extras | ⬜ Pendiente | Indexer, admin, CSV y auditoría |
+
+Detalle de la entrega actual en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Arranque rápido
 
-Requisitos: **Docker + el plugin Docker Compose**. Nada más se instala en el host.
+Único requisito: **Docker + plugin Docker Compose**. Nada más se instala en el host.
 
 ```bash
 make doctor   # Docker, versiones y puertos 3000/8545
+make env      # crea .env.dev desde .env.example
 make up       # Anvil + Next.js con hot reload, en segundo plano
-make test     # forge test dentro del contenedor de contratos
+make test     # forge test en el contenedor de contratos
+make check    # nombres, enlaces, Compose y formato
 make down     # parar el stack
 ```
 
 | URL | Servicio |
 |---|---|
-| <http://127.0.0.1:3000> | dApp (hola mundo + `/api/health`) |
+| <http://127.0.0.1:3000> | dApp (estado + `/api/health`) |
 | <http://127.0.0.1:8545> | Anvil, `chainId 31337` |
 
-`make help` lista el resto de objetivos: `dev` (primer plano), `logs`, `ps`, `fmt`,
-`fmt-check`, `build-web`, `build-contracts` y `clean`.
+`make help` lista el resto de objetivos.
 
 ## Estructura
 
+```text
+├── compose.yaml             # base: red interna, healthchecks, nombre de proyecto
+├── compose.dev.yaml         # DEV: Anvil + Next.js con hot reload
+├── compose.tools.yaml       # one-shot: forge test/fmt (perfil tools)
+├── Makefile                 # interfaz única, compatible con GNU Make 3.81
+├── contracts/               # Foundry: Dockerfile, foundry.toml, src/, test/, script/
+├── web/                     # Next.js 15 + TypeScript (App Router)
+├── deployments/             # direcciones por chainId (fase 2)
+├── docs/                    # ARCHITECTURE, ENVIRONMENT, NAMING e índice
+├── scripts/                 # comprobaciones de nombres y enlaces
+└── .github/                 # CI, plantillas de issue/PR, CODEOWNERS, Dependabot
 ```
-compose.yaml            # base común (red, healthchecks)
-compose.dev.yaml        # Anvil + Next.js con hot reload
-compose.tools.yaml      # trabajos one-shot: forge test/fmt (perfil tools)
-Makefile                # interfaz única; compatible con GNU Make 3.81
-contracts/              # Foundry: Dockerfile, foundry.toml, smoke test y test de toolchain
-web/                    # Next.js 15 + TypeScript: hola mundo y /api/health
-deployments/            # direcciones por chainId (se llena en fase 2)
-docs/                   # ARCHITECTURE, ENVIRONMENT y NAMING
-scripts/                # check-file-names.sh
-.github/workflows/ci.yml
-```
 
-## Docker-first
+## Stack y versiones
 
-Foundry, Node/pnpm, Anvil, Caddy y PostgreSQL se ejecutan en contenedores con versiones
-fijadas. El mismo stack se reproduce en el VPS de PRE (Polygon Amoy) y de PRO (Polygon
-mainnet), con un proyecto Compose independiente por entorno y un reverse proxy Caddy
-compartido.
+| Componente | Versión fijada |
+|---|---|
+| Contratos | Solidity 0.8.24 · Foundry `v1.5.1` (imagen por digest) |
+| Web | Next.js `15.5.28` · React `19.3.1` · TypeScript `5.9.3` · pnpm `12.16.1` |
+| Runtime | Node 22 (`22.23.4`, imagen por digest) |
+| Cadena | Anvil `31337` (DEV) · Polygon Amoy `80002` (pruebas) · Polygon `137` (PRO) |
 
-Versiones fijadas: Foundry `v1.5.1`, Node 22 (`22.23.4`), pnpm `12.16.1`, Next.js
-`15.5.28`. Las imágenes base se referencian por digest en los `Dockerfile` y en el
-`Makefile`.
+Todo el toolchain corre en contenedores; el host no necesita Node, Foundry ni Caddy. Los
+detalles del entorno medido están en [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
+
+## Entornos
 
 | Entorno | Compose | Cadena | Web |
 |---|---|---|---|
@@ -73,14 +90,23 @@ Versiones fijadas: Foundry `v1.5.1`, Node 22 (`22.23.4`), pnpm `12.16.1`, Next.j
 
 | Documento | Contenido |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Alcance revisado, decisiones, modelo de contrato, flujos, seguridad, Docker/entornos y plan por fases |
-| [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | Host de desarrollo verificado: hardware, versiones de Docker/Compose, toolchain, red, límites y checklist previo a la Fase 1 |
-| [`docs/NAMING.md`](docs/NAMING.md) | Convenciones: archivos y código en inglés, documentación en español, aplicación automática en CI |
+| [`docs/README.md`](docs/README.md) | Índice y política de mantenimiento de la documentación |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Alcance, ADRs, modelo on-chain, seguridad, Docker y plan por fases |
+| [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | Host verificado, límites y checklist previo |
+| [`docs/NAMING.md`](docs/NAMING.md) | Convenciones de nombres y su aplicación en CI |
+| [`CHANGELOG.md`](CHANGELOG.md) | Historial de versiones |
 
-## Siguiente paso
+## Contribuir
 
-**Fase 2 — contratos**: `SaleToken` y `TokenSale` con OpenZeppelin 5.x, tests unitarios,
-fuzz e invariantes, y despliegue reproducible en **Polygon Amoy**. Las decisiones de la
-§15 ya están cerradas: precio 0,01 POL/TK con tope 0,05, límites de 1.000/100.000 TK por
-wallet, ventana de 30 días y sin allowlist ni reembolsos. El smoke test y `Smoke.sol` se
-sustituyen por los contratos reales.
+Lee [`CONTRIBUTING.md`](CONTRIBUTING.md) antes de abrir una PR. Los commits siguen
+[Conventional Commits](https://www.conventionalcommits.org/) en inglés y el código se
+nombra en inglés; la documentación se escribe en español.
+
+## Seguridad
+
+No abras issues públicas para vulnerabilidades. Usa el canal privado descrito en
+[`SECURITY.md`](SECURITY.md). El proyecto no está autorizado para mainnet.
+
+## Licencia
+
+Propietaria, todos los derechos reservados. Ver [`LICENSE`](LICENSE).
