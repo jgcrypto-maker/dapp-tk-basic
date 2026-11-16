@@ -935,7 +935,7 @@ Medición del host de desarrollo antes de arrancar la Fase 1. El detalle complet
 | VM de Docker | 8 vCPU · 8 GiB · overlayfs | Techo real de memoria para builds concurrentes |
 | Toolchain de host | `git` 2.50.1, `make` **3.81**, `jq`, `curl`; **sin** node/pnpm/forge/caddy/psql | Cumple ADR-11; `Makefile` compatible con 3.81 |
 | Disco | 228 GiB, **44 GiB libres** (78 % usado) | Recurso más ajustado; no acumular tags ni caché |
-| Red | GHCR y Docker Hub accesibles; SSH a GitHub OK como `josegalindo-it` | Sin configuración extra para construir y desplegar |
+| Red | GHCR y Docker Hub accesibles; SSH a GitHub OK como `jgcrypto-maker` | Sin configuración extra para construir y desplegar |
 
 **Estado del motor tras la limpieza:** 0 contenedores, 0 imágenes, 0 volúmenes y 0 caché de build; puertos `3000` y `8545` libres. Se eliminó un proyecto Compose huérfano (`dapp-basic-tk`) levantado desde una ruta inexistente, que ocupaba ambos puertos y consumía 4,88 GB de imágenes y caché.
 

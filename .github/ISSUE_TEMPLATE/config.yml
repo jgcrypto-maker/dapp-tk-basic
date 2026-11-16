@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Problema de seguridad
-    url: https://github.com/josegalindo-it/dapp-tk-basic/security/advisories/new
+    url: https://github.com/jgcrypto-maker/dapp-tk-basic/security/advisories/new
     about: No abras una issue pública. Reporta vulnerabilidades por el canal privado.
   - name: Documentación
-    url: https://github.com/josegalindo-it/dapp-tk-basic/blob/main/docs/README.md
+    url: https://github.com/jgcrypto-maker/dapp-tk-basic/blob/main/docs/README.md
     about: Arquitectura, entorno, convenciones y changelog.

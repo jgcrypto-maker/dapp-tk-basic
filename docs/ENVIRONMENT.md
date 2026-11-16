@@ -80,8 +80,8 @@ La ausencia de toolchain de desarrollo es **el estado deseado** (ADR-11). Si alg
 |---|---|
 | `https://ghcr.io/v2/` | HTTP `401` en 0,35 s (esperado sin token: el registro responde) |
 | `https://registry-1.docker.io/v2/` | HTTP `401` en 0,38 s (esperado) |
-| SSH a `git@github-galindoit` | Autentica como `josegalindo-it` |
-| Remoto del repo | `git@github-galindoit:josegalindo-it/dapp-tk-basic.git` |
+| SSH a `git@github-jgcrypto` | Autentica como `jgcrypto-maker` |
+| Remoto del repo | `git@github-jgcrypto:jgcrypto-maker/dapp-tk-basic.git` |
 | Puertos `80`, `443`, `5432`, `8080` | Libres |
 | Puertos `3000`, `8545` | Libres tras la limpieza |
 
@@ -171,3 +171,4 @@ Registrar el resultado aquí con una fila nueva en el historial (§10) cuando ca
 |---|---|
 | 2026-10-30 | Medición inicial del host, limpieza del proyecto huérfano `dapp-basic-tk` y verificación de que no hay toolchain de desarrollo instalado. |
 | 2026-10-30 | Fase 1 verificada en el host: imágenes `web` y `contracts` construidas, `make up` (Anvil `31337` + web 200), `make test` con 3 tests en verde y `fmt --check` limpio. Docker Desktop hubo que arrancarlo manualmente tras el reinicio de la sesión. |
+| 2026-11-16 | Remoto del repositorio migrado a `git@github-jgcrypto:jgcrypto-maker/dapp-tk-basic.git`; identidad de commits unificada a `Jose Galindo <338003521+jgcrypto-maker@users.noreply.github.com>`. |

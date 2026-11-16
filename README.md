@@ -1,6 +1,6 @@
 # dapp-tk-basic
 
-[![CI](https://github.com/josegalindo-it/dapp-tk-basic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/josegalindo-it/dapp-tk-basic/actions/workflows/ci.yml)
+[![CI](https://github.com/jgcrypto-maker/dapp-tk-basic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jgcrypto-maker/dapp-tk-basic/actions/workflows/ci.yml)
 [![Estado](https://img.shields.io/badge/estado-fase%201%20%C2%B7%20toolchain-blue)](#estado)
 [![Red](https://img.shields.io/badge/red-Polygon%20Amoy%2080002-8247e5)](https://amoy.polygonscan.com)
 [![Licencia](https://img.shields.io/badge/licencia-propietaria-lightgrey)](LICENSE)

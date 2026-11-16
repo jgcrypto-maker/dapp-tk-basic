@@ -33,5 +33,5 @@ Primera entrega: arquitectura cerrada y toolchain reproducible en contenedores.
 - Limpieza de un proyecto Compose huérfano que ocupaba los puertos 3000 y 8545.
 - Ruido de buildx contenido en `.buildx/` dentro del repositorio.
 
-[Unreleased]: https://github.com/josegalindo-it/dapp-tk-basic/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/josegalindo-it/dapp-tk-basic/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jgcrypto-maker/dapp-tk-basic/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/jgcrypto-maker/dapp-tk-basic/releases/tag/v0.1.0
