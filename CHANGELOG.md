@@ -18,8 +18,10 @@ el versionado [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
-- **Fase 2 (en curso):** `SaleToken`, `TokenSale`, tests unitarios/fuzz/invariantes,
-  script de despliegue y `deployments/<entorno>.json`.
+- **Fase 2:** `SaleToken` y `TokenSale` con OpenZeppelin 5.7.0 y forge-std 1.9.7
+  (submodules y `foundry.lock`), 38 tests unitarios/fuzz/invariantes, `Deploy.s.sol`,
+  `deployments/dev.json`, `make deploy-local`/`check-local`/`e2e`, imagen de contratos
+  con UID/GID del host y job E2E en CI.
 
 ## [0.1.0] - 2026-10-30
 

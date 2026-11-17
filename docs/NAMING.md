@@ -36,9 +36,11 @@ Regla general: **inglés, ASCII, sin espacios, sin acentos y sin `ñ`**.
 | Struct / enum | `PascalCase` | `SaleState`, `SaleStatus` |
 | Función | `camelCase`, verbo primero | `buy`, `buyFor`, `quote`, `withdrawProceeds` |
 | Variable de estado / local | `camelCase` en inglés | `totalTokensSold`, `remainingTokens` |
-| Constante / `immutable` | `UPPER_SNAKE_CASE` | `MAX_TOKENS_PER_WALLET`, `TOKEN_DECIMALS` |
+| Constante | `UPPER_SNAKE_CASE` | `MAX_PAGE`, `ONE_TOKEN` |
+| `immutable` público (ABI) | `camelCase` | `pricePerTokenWei`, `startTime` |
+| `immutable` privado | `_` + `camelCase` | `_tokenDecimals` |
 | Privada / interna | `_` + `camelCase` | `_buyers`, `_isBuyer` |
-| Evento | `PascalCase`, en pasado | `TokensPurchased`, `PriceUpdated` |
+| Evento | `PascalCase`, en pasado | `TokensPurchased`, `ProceedsWithdrawn` |
 | Error | `PascalCase`, condición | `SoldOut`, `IncorrectPayment`, `AboveWalletCap` |
 | Modifier | `camelCase` | `whenSaleActive`, `onlyOwner` |
 | Parámetro | `camelCase` con unidad si aplica | `tokenAmount`, `pricePerTokenWei` |

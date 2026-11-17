@@ -868,31 +868,29 @@ Reglas:
 
 ### 8.8 Despliegue de contratos (contenedor one-shot)
 
-El despliegue **no se ejecuta en el VPS de la web**. Se ejecuta desde el portátil del responsable o desde CI, con el stack `compose.tools.yaml` y el `.env` del entorno:
+El despliegue **no se ejecuta en el VPS de la web**: se lanza desde el portátil del responsable o desde CI con `compose.tools.yaml` y el `.env` del entorno.
 
 ```bash
-# tests
-ENV_FILE=.env.dev docker compose -f compose.tools.yaml run --rm contracts forge test -vvv
+make test          # forge test en contenedor
+make e2e           # Anvil + despliegue + comprobación on-chain
+make deploy-local  # despliegue en Anvil → deployments/dev.json
+make check-local   # verifica precio, inventario, suministro y símbolo
 
 # despliegue en Amoy (PRE)
-ENV_FILE=.env.pre docker compose -f compose.tools.yaml run --rm contracts \
-  forge script script/Deploy.s.sol --broadcast --verify
-
-# despliegue en Polygon mainnet (PRO) — requiere aprobación manual
-ENV_FILE=.env.pro docker compose -f compose.tools.yaml run --rm contracts \
-  forge script script/Deploy.s.sol --broadcast --verify
+ENV_FILE=.env.pre OWNER=0x… \
+  docker compose -f compose.yaml -f compose.tools.yaml run --rm contracts \
+  script script/Deploy.s.sol --rpc-url "$AMOY_RPC_URL" --broadcast --verify
 ```
 
-`ETH_RPC_URL` y `ETHERSCAN_API_KEY` se leen del `env_file` dentro del contenedor; no se expanden en el host.
+`ETH_RPC_URL`, `OWNER` y `ETHERSCAN_API_KEY` se leen del `env_file` dentro del contenedor; no se expanden en el host.
 
-Secuencia (la misma de siempre, ahora containerizada):
+Secuencia (un solo despliegue atómico):
 
-1. `SaleToken(initialSupply, deployer)` → suministro fijo emitido al deployer.
-2. `TokenSale(token, price, start, end, minTokens, maxPerWallet, owner)`.
-3. `token.transfer(sale, inventory)` → el contrato de venta recibe el inventario.
-4. Verificar ambos contratos en Polygonscan.
-5. Escribir `deployments/<chainId>.json` (volumen montado) y commitearlo/etiquetarlo.
-6. (Mainnet) Transferir la ownership a la Safe **y verificar** que `owner()` es la Safe.
+1. `Deploy.s.sol` construye `SaleConfig` (suministro, inventario, tesorería, precio, ventana, límites y owner) con valores por defecto y overrides por variable de entorno.
+2. `new TokenSale(config)` crea internamente el `SaleToken` y acuña el inventario directamente en la venta (ADR-02/ADR-14).
+3. Se escribe `deployments/<entorno>.json` con `chainId`, `sale`, `token`, `owner` y `deployBlock`.
+4. Verificar token y venta en Polygonscan (son dos direcciones).
+5. (Mainnet) Transferir la ownership a la Safe **y verificar** que `owner()` es la Safe.
 
 ### 8.9 Despliegue de la web y CI/CD
 
@@ -1034,7 +1032,6 @@ dapp-tk-basic/
 │   │   └── TokenSale.sol
 │   ├── test/
 │   │   ├── TokenSale.t.sol
-│   │   ├── TokenSale.fuzz.t.sol
 │   │   └── TokenSale.invariants.t.sol
 │   └── script/Deploy.s.sol
 ├── web/
@@ -1053,6 +1050,7 @@ dapp-tk-basic/
 ├── docker/
 │   └── Caddyfile
 ├── deployments/
+│   ├── dev.json
 │   ├── 80002.json
 │   └── 137.json
 ├── docs/
@@ -1062,7 +1060,8 @@ dapp-tk-basic/
 │   └── NAMING.md
 ├── scripts/
 │   ├── check-file-names.sh
-│   └── check-links.sh
+│   ├── check-links.sh
+│   └── check-local.sh
 ├── .github/
 │   ├── workflows/ci.yml
 │   ├── ISSUE_TEMPLATE/
@@ -1086,9 +1085,10 @@ dapp-tk-basic/
 - `deployments/*.json` es la única fuente de direcciones; lo escribe el job de despliegue y se commitea/etiqueta.
 - `web/` y `contracts/` mantienen su propio `Dockerfile`; no hay toolchains en la imagen final de la web.
 
-- **Implementado en la Fase 1 (2026-10-30):** `compose.yaml`, `compose.dev.yaml`, `compose.tools.yaml`, `Makefile`, `.env.example`, `.dockerignore`, `contracts/{Dockerfile,foundry.toml,src/Smoke.sol,test/Toolchain.t.sol}`, `web/{Dockerfile,package.json,pnpm-lock.yaml,app/}`, `scripts/check-file-names.sh` y `.github/workflows/ci.yml`. Verificado en local: `make dev` (web 200 + Anvil `31337`), `make test` (3 tests), `fmt --check` y build de las imágenes `web:local` y `contracts:local`.
+- **Implementado en la Fase 1 (2026-10-30):** `compose.yaml`, `compose.dev.yaml`, `compose.tools.yaml`, `Makefile`, `.env.example`, `.dockerignore`, `contracts/{Dockerfile,foundry.toml}`, `web/{Dockerfile,package.json,pnpm-lock.yaml,app/}`, `scripts/check-file-names.sh` y `.github/workflows/ci.yml`. Verificado en local: `make dev` (web 200 + Anvil `31337`), `make test`, `fmt --check` y build de las imágenes `web:local` y `contracts:local`.
+- **Fase 2 (2026-11-17):** `SaleToken.sol` y `TokenSale.sol` con OpenZeppelin 5.7 y forge-std 1.9.7 (submodules + `foundry.lock`), 38 tests (unitarios, fuzz e invariantes), `script/Deploy.s.sol`, `deployments/dev.json`, `make deploy-local` / `check-local` / `e2e`, imagen de contratos con UID/GID del host y job E2E en CI. Verificado en Anvil: despliegue atómico y `check-local` en verde.
 - **Organización del repositorio (2026-11-16):** gobernanza (`LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`), plantillas de issue y PR, `CODEOWNERS`, Dependabot, `.editorconfig`/`.gitattributes` y `scripts/check-links.sh` integrado en `make check` y en CI.
-- **Pendiente por fase:** `compose.pre.yaml`, `compose.pro.yaml`, `compose.edge.yaml` y `docker/Caddyfile` (fase 5); `SaleToken`/`TokenSale`, `Deploy.s.sol` y `deployments/*.json` (fase 2); rutas `wallet/[address]`, `admin` y `lib/*` de la web (fases 3–4).
+- **Pendiente por fase:** broadcast real en Amoy (requiere clave con POL de prueba y RPC); `compose.pre.yaml`, `compose.pro.yaml`, `compose.edge.yaml` y `docker/Caddyfile` (fase 5); rutas `wallet/[address]`, `admin` y `lib/*` de la web (fases 3–4).
 
 ---
 

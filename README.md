@@ -1,7 +1,7 @@
 # dapp-tk-basic
 
 [![CI](https://github.com/jgcrypto-maker/dapp-tk-basic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jgcrypto-maker/dapp-tk-basic/actions/workflows/ci.yml)
-[![Estado](https://img.shields.io/badge/estado-fase%201%20%C2%B7%20toolchain-blue)](#estado)
+[![Estado](https://img.shields.io/badge/estado-fase%202%20%C2%B7%20contratos-blue)](#estado)
 [![Red](https://img.shields.io/badge/red-Polygon%20Amoy%2080002-8247e5)](https://amoy.polygonscan.com)
 [![Licencia](https://img.shields.io/badge/licencia-propietaria-lightgrey)](LICENSE)
 
@@ -21,9 +21,9 @@ para el precio.
 
 | Fase | Estado | Entrega |
 |---|---|---|
-| 0 · Arquitectura | ✅ Cerrada | [ARCHITECTURE.md](docs/ARCHITECTURE.md) v0.5 y decisiones §15 cerradas |
+| 0 · Arquitectura | ✅ Cerrada | [ARCHITECTURE.md](docs/ARCHITECTURE.md) v0.7 y decisiones §15 cerradas |
 | 1 · Toolchain Docker | ✅ Cerrada | Compose, Dockerfiles, Makefile y CI funcionando |
-| 2 · Contratos | ⏭️ Siguiente | `SaleToken`, `TokenSale`, tests y despliegue en Amoy |
+| 2 · Contratos | 🟡 En curso | `SaleToken`, `TokenSale`, 38 tests y despliegue local; broadcast en Amoy pendiente |
 | 3 · Dashboard | ⬜ Pendiente | Lectura de estado y consulta por wallet |
 | 4 · Compra E2E | ⬜ Pendiente | Formulario, simulación, firma y recibo |
 | 5 · PRE/PRO | ⬜ Pendiente | VPS, edge, TLS y pipelines |
@@ -40,6 +40,7 @@ make doctor   # Docker, versiones y puertos 3000/8545
 make env      # crea .env.dev desde .env.example
 make up       # Anvil + Next.js con hot reload, en segundo plano
 make test     # forge test en el contenedor de contratos
+make e2e      # Anvil + despliegue de la venta + comprobación on-chain
 make check    # nombres, enlaces, Compose y formato
 make down     # parar el stack
 ```
@@ -56,13 +57,13 @@ make down     # parar el stack
 ```text
 ├── compose.yaml             # base: red interna, healthchecks, nombre de proyecto
 ├── compose.dev.yaml         # DEV: Anvil + Next.js con hot reload
-├── compose.tools.yaml       # one-shot: forge test/fmt (perfil tools)
+├── compose.tools.yaml       # one-shot: forge test/fmt, despliegue y checks
 ├── Makefile                 # interfaz única, compatible con GNU Make 3.81
-├── contracts/               # Foundry: Dockerfile, foundry.toml, src/, test/, script/
+├── contracts/               # Foundry: src/{SaleToken,TokenSale}.sol, test/, script/Deploy.s.sol
 ├── web/                     # Next.js 15 + TypeScript (App Router)
-├── deployments/             # direcciones por chainId (fase 2)
+├── deployments/             # dev.json y, por entorno, <chainId>.json
 ├── docs/                    # ARCHITECTURE, ENVIRONMENT, NAMING e índice
-├── scripts/                 # comprobaciones de nombres y enlaces
+├── scripts/                 # comprobaciones de nombres, enlaces y despliegue local
 └── .github/                 # CI, plantillas de issue/PR, CODEOWNERS, Dependabot
 ```
 
@@ -70,7 +71,7 @@ make down     # parar el stack
 
 | Componente | Versión fijada |
 |---|---|
-| Contratos | Solidity 0.8.24 · Foundry `v1.5.1` (imagen por digest) |
+| Contratos | Solidity 0.8.24 · Foundry `v1.5.1` · OpenZeppelin `5.7.0` · forge-std `1.9.7` |
 | Web | Next.js `15.5.28` · React `19.3.1` · TypeScript `5.9.3` · pnpm `12.16.1` |
 | Runtime | Node 22 (`22.23.4`, imagen por digest) |
 | Cadena | Anvil `31337` (DEV) · Polygon Amoy `80002` (pruebas) · Polygon `137` (PRO) |

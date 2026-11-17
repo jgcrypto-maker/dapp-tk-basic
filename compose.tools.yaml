@@ -1,4 +1,4 @@
-# One-shot jobs: tests, formatting and (from phase 2) deployments.
+# One-shot jobs: tests, formatting, deployment and on-chain checks.
 # Usage: docker compose -f compose.yaml -f compose.tools.yaml run --rm contracts test
 services:
   contracts:
@@ -7,14 +7,16 @@ services:
       context: ./contracts
       args:
         FOUNDRY_VERSION: ${FOUNDRY_VERSION:-v1.5.1@sha256:3a70bfa9bd2c732a767bb60d12c8770b40e8f9b6cca28efc4b12b1be81c7f28e}
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
     image: ${CONTRACTS_IMAGE:-dapp-tk-contracts:local}
-    working_dir: /app
+    # The repository is mounted at /workspace so `../deployments` and `scripts/` resolve.
+    working_dir: /workspace/contracts
     env_file:
       - path: ${ENV_FILE:-.env.dev}
         required: false
     volumes:
-      - ./contracts:/app
-      - ./deployments:/app/deployments
+      - .:/workspace
       - foundry_cache:/home/foundry/.svm
     networks:
       - internal

@@ -1,5 +1,5 @@
 # Foundry configuration — contracts toolchain.
-# Phase 1: only the smoke test exists. SaleToken/TokenSale arrive in phase 2.
+# `solc`, `evm_version` and dependency remappings are pinned for reproducible builds.
 
 [profile.default]
 src = "src"
@@ -7,11 +7,16 @@ test = "test"
 script = "script"
 out = "out"
 libs = ["lib"]
-solc_version = "0.8.24"
+solc = "0.8.24"
+# Paris avoids PUSH0/MCOPY/TSTORE so the bytecode runs on any Polygon EVM target.
+evm_version = "paris"
 optimizer = true
 optimizer_runs = 200
-evm_version = "shanghai"
-fs_permissions = [{ access = "read", path = "./deployments" }]
+fs_permissions = [{ access = "read-write", path = "../deployments" }]
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
 
 [fmt]
 line_length = 100
@@ -19,11 +24,12 @@ tab_width = 4
 bracket_spacing = true
 
 [fuzz]
-runs = 256
+runs = 512
 
 [invariant]
-runs = 64
-depth = 32
+runs = 128
+depth = 64
+fail_on_revert = false
 
 [rpc_endpoints]
 localhost = "http://anvil:8545"

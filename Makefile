@@ -16,8 +16,17 @@ WEB_IMAGE ?= dapp-tk-web:local
 CONTRACTS_IMAGE ?= dapp-tk-contracts:local
 export FOUNDRY_VERSION NODE_IMAGE WEB_IMAGE CONTRACTS_IMAGE
 
+# Build the contracts image with the host uid/gid so bind-mounted files keep the owner.
+HOST_UID := $(shell id -u)
+HOST_GID := $(shell id -g)
+export HOST_UID HOST_GID
+
+# Anvil account #0: public test key, only valid on the local chain.
+DEV_SENDER ?= 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+ANVIL_RPC ?= http://anvil:8545
+
 .PHONY: help doctor env dev up down logs ps test fmt fmt-check build-web build-contracts clean \
-	naming docs-links compose-check check
+	naming docs-links compose-check check chain deploy-local check-local e2e
 
 help: ## Show this help
 	@echo "dapp-tk-basic — make targets"
@@ -38,6 +47,10 @@ help: ## Show this help
 	@echo "  make check            Run naming, docs links, compose and fmt checks"
 	@echo "  make build-web        Build the production web image (runner stage)"
 	@echo "  make build-contracts  Build the contracts image"
+	@echo "  make chain            Start only Anvil (waits until healthy)"
+	@echo "  make deploy-local     Deploy the sale on Anvil and write deployments/dev.json"
+	@echo "  make check-local      Verify the deployed sale on Anvil"
+	@echo "  make e2e              Anvil + deploy + on-chain checks"
 	@echo "  make clean            Stop DEV and drop its volumes"
 
 doctor: ## Check the host toolchain
@@ -55,7 +68,7 @@ dev: env ## Start DEV stack in foreground
 	$(COMPOSE) $(DEV) up --build
 
 up: env ## Start DEV stack in background
-	$(COMPOSE) $(DEV) up -d --build
+	$(COMPOSE) $(DEV) up -d --wait --build
 
 down: ## Stop DEV stack
 	$(COMPOSE) $(DEV) down --remove-orphans
@@ -77,6 +90,19 @@ fmt-check: ## Check Solidity formatting
 
 build-contracts: ## Build the contracts image
 	$(COMPOSE) $(TOOLS) build contracts
+
+chain: ## Start only Anvil and wait until healthy
+	$(COMPOSE) $(DEV) up -d --wait anvil
+
+deploy-local: chain ## Deploy the sale on Anvil and write deployments/dev.json
+	$(COMPOSE) $(TOOLS) run --rm --build contracts script script/Deploy.s.sol \
+		--rpc-url $(ANVIL_RPC) --broadcast --unlocked --sender $(DEV_SENDER)
+
+check-local: ## Verify the deployed sale on Anvil
+	$(COMPOSE) $(TOOLS) run --rm --build --workdir /workspace --entrypoint sh \
+		contracts scripts/check-local.sh
+
+e2e: deploy-local check-local ## Anvil + deploy + on-chain checks
 
 naming: ## Check file names against docs/NAMING.md
 	./scripts/check-file-names.sh
