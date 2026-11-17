@@ -9,7 +9,9 @@ services:
       target: dev
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914}
-    command: pnpm dev
+    # Sync the named node_modules volume with the lockfile before starting, so dependency
+    # changes do not require deleting the volume by hand.
+    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm dev"]
     restart: "no"
     env_file:
       - path: .env.dev
