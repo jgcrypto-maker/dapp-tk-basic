@@ -31,3 +31,6 @@ contracts/broadcast/
 *.swp
 *.swo
 .history/
+
+# Generated per deployment (make deploy-local)
+web/public/deployment.json

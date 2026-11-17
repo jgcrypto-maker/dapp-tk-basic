@@ -1,0 +1,27 @@
+{
+	auto_https off
+	admin off
+}
+
+:3000 {
+	root * /srv
+	encode gzip
+
+	# Runtime configuration must never be cached.
+	@runtime path /config.json /deployment.json
+	header @runtime Cache-Control "no-store"
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options DENY
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	file_server
+
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
+}

@@ -1,122 +1,273 @@
-const chainId = process.env.NEXT_PUBLIC_CHAIN_ID ?? "31337";
-const chainName =
-  chainId === "137" ? "Polygon PoS" : chainId === "80002" ? "Polygon Amoy" : "Anvil (local)";
+"use client";
 
-const phases = [
-  { id: "0", label: "Arquitectura", state: "done" },
-  { id: "1", label: "Toolchain Docker", state: "current" },
-  { id: "2", label: "Contratos", state: "next" },
-  { id: "3", label: "Dashboard", state: "next" },
-  { id: "4", label: "Compra E2E", state: "next" },
-] as const;
+import { useEffect, useState } from "react";
+
+import { erc20Abi, saleAbi, type SaleState } from "@/lib/abi";
+import { createSaleClient } from "@/lib/chain";
+import {
+  countdown,
+  explorerAddress,
+  formatPol,
+  formatToken,
+  percent,
+  saleStatus,
+  shortAddress,
+} from "@/lib/format";
+import { loadRuntime, type DeploymentSale, type RuntimeConfig } from "@/lib/runtime";
+
+type Buyer = { address: `0x${string}`; tokens: bigint; paid: bigint };
+
+type Loaded = {
+  config: RuntimeConfig;
+  sale: DeploymentSale;
+  state: SaleState;
+  name: string;
+  symbol: string;
+  decimals: number;
+  buyers: Buyer[];
+};
 
 export default function HomePage() {
+  const [data, setData] = useState<Loaded | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30_000);
+
+    (async () => {
+      try {
+        const { config, deployment } = await loadRuntime();
+        if (deployment.chainId !== config.chainId) {
+          throw new Error(
+            `deployment.json es de chainId ${deployment.chainId} y config.json de ${config.chainId}`,
+          );
+        }
+
+        const sale = deployment.sales[0];
+        const client = createSaleClient(config.chainId, config.rpcUrl);
+
+        const [state, name, symbol, decimals, rows] = await Promise.all([
+          client.readContract({ address: sale.sale, abi: saleAbi, functionName: "saleState" }),
+          client.readContract({ address: sale.token, abi: erc20Abi, functionName: "name" }),
+          client.readContract({ address: sale.token, abi: erc20Abi, functionName: "symbol" }),
+          client.readContract({ address: sale.token, abi: erc20Abi, functionName: "decimals" }),
+          client.readContract({
+            address: sale.sale,
+            abi: saleAbi,
+            functionName: "getBuyers",
+            args: [0n, 100n],
+          }),
+        ]);
+
+        const [addresses, amounts, paid] = rows;
+        const buyers: Buyer[] = addresses.map((address, index) => ({
+          address,
+          tokens: amounts[index],
+          paid: paid[index],
+        }));
+
+        if (!cancelled) {
+          setData({
+            config,
+            sale,
+            state: state as unknown as SaleState,
+            name,
+            symbol,
+            decimals,
+            buyers,
+          });
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <main>
+        <p className="eyebrow">Fase 3 · dashboard</p>
+        <h1>No se pudo cargar el estado</h1>
+        <div className="alert">{error}</div>
+        <p className="mono">
+          Comprueba que Anvil está en marcha y que existe <code>/deployment.json</code> (ejecuta{" "}
+          <code>make deploy-local</code>).
+        </p>
+      </main>
+    );
+  }
+
+  if (!data) {
+    return (
+      <main>
+        <p className="eyebrow">Fase 3 · dashboard</p>
+        <h1>Cargando estado on-chain…</h1>
+        <p className="lede">Leyendo configuración y contrato por RPC.</p>
+      </main>
+    );
+  }
+
+  const { config, sale, state, name, symbol, decimals, buyers } = data;
+  const {
+    token,
+    totalSupply,
+    inventory,
+    remainingTokens,
+    totalTokensSold,
+    totalRaisedWei,
+    withdrawableWei,
+    buyerCount,
+    pricePerTokenWei,
+    startTime,
+    endTime,
+    paused,
+    owner,
+  } = state;
+
+  const status = saleStatus({ paused, startTime, endTime, remainingTokens, now });
+  const soldPercent = percent(totalTokensSold, inventory);
+  const progress = inventory === 0n ? 0 : Number((totalTokensSold * 10_000n) / inventory) / 100;
+  const fdvWei = (pricePerTokenWei * totalSupply) / 10n ** 18n;
+  const soldValueWei = (pricePerTokenWei * totalTokensSold) / 10n ** 18n;
+
   return (
     <main>
-      <p style={{ color: "var(--muted)", margin: 0, fontSize: 14, letterSpacing: "0.08em" }}>
-        FASE 1 · TOOLCHAIN
-      </p>
-      <h1 style={{ fontSize: "clamp(2rem, 6vw, 3.25rem)", margin: "0.4rem 0 0.75rem" }}>
-        dapp-tk-basic
-      </h1>
-      <p style={{ color: "var(--muted)", margin: 0, maxWidth: 620 }}>
-        Prototipo de venta de un token ERC-20 a precio fijo en POL sobre Polygon. Esta página es el
-        “hola mundo” del toolchain: Next.js, Foundry y Anvil corriendo en contenedores.
+      <p className="eyebrow">Fase 3 · dashboard</p>
+      <div className="row">
+        <h1 style={{ marginBottom: 0 }}>
+          {name} <span className="mono">({symbol})</span>
+        </h1>
+        <span className="spacer" />
+        <span className={`badge ${status.tone}`}>{status.label}</span>
+      </div>
+      <p className="lede">
+        Venta primaria a precio fijo en POL. Todas las métricas se leen del contrato; nada se
+        calcula en el servidor. Entorno <strong>{config.env}</strong>, chainId{" "}
+        <strong>{config.chainId}</strong>.
       </p>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: 12,
-          marginTop: 32,
-        }}
-      >
-        <div style={cardStyle}>
-          <span style={labelStyle}>Red configurada</span>
-          <strong style={{ fontSize: 20 }}>{chainName}</strong>
-          <span style={monoStyle}>chainId {chainId}</span>
+      <section className="grid">
+        <div className="card">
+          <span className="label">Precio</span>
+          <span className="value">{formatPol(pricePerTokenWei, 6)} POL</span>
+          <span className="mono">por 1 {symbol}</span>
         </div>
-        <div style={cardStyle}>
-          <span style={labelStyle}>Healthcheck</span>
-          <strong style={{ fontSize: 20, color: "var(--ok)" }}>API operativa</strong>
-          <a href="/api/health" style={monoStyle}>
-            /api/health
-          </a>
+        <div className="card">
+          <span className="label">Vendido</span>
+          <span className="value">{formatToken(totalTokensSold, decimals)}</span>
+          <span className="mono">{soldPercent} del inventario</span>
+        </div>
+        <div className="card">
+          <span className="label">Restante</span>
+          <span className="value">{formatToken(remainingTokens, decimals)}</span>
+          <span className="mono">de {formatToken(inventory, decimals)}</span>
+        </div>
+        <div className="card">
+          <span className="label">Recaudado</span>
+          <span className="value">{formatPol(totalRaisedWei, 4)} POL</span>
+          <span className="mono">retirable {formatPol(withdrawableWei, 4)} POL</span>
+        </div>
+        <div className="card">
+          <span className="label">Compradores</span>
+          <span className="value">{buyerCount.toString()}</span>
+          <span className="mono">wallets únicas</span>
+        </div>
+        <div className="card">
+          <span className="label">Cierre</span>
+          <span className="value">{countdown(endTime, now)}</span>
+          <span className="mono">{new Date(Number(endTime) * 1000).toLocaleString("es-ES")}</span>
+        </div>
+        <div className="card">
+          <span className="label">FDV</span>
+          <span className="value">{formatPol(fdvWei, 2)} POL</span>
+          <span className="mono">valor vendido {formatPol(soldValueWei, 2)} POL</span>
+        </div>
+        <div className="card">
+          <span className="label">Suministro</span>
+          <span className="value">{formatToken(totalSupply, decimals)}</span>
+          <span className="mono">fijo, sin mint</span>
         </div>
       </section>
 
-      <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 16, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          Plan por fases
-        </h2>
-        <ul style={{ listStyle: "none", padding: 0, margin: "12px 0 0", display: "grid", gap: 8 }}>
-          {phases.map((phase) => (
-            <li key={phase.id} style={rowStyle}>
-              <span style={{ ...badgeStyle, ...badgeState[phase.state] }}>{phase.id}</span>
-              <span style={{ opacity: phase.state === "next" ? 0.6 : 1 }}>{phase.label}</span>
-              <span style={{ marginLeft: "auto", ...monoStyle, fontSize: 12 }}>
-                {phase.state === "done" ? "cerrada" : phase.state === "current" ? "en curso" : "pendiente"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <div className="bar" aria-hidden>
+        <span style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
+      </div>
 
-      <p style={{ ...monoStyle, marginTop: 40 }}>
-        Documentación: docs/ARCHITECTURE.md · docs/ENVIRONMENT.md
-      </p>
+      <h2>Contratos</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td className="label">Venta</td>
+            <td className="mono">{sale.sale}</td>
+            <td className="right">
+              <a href={explorerAddress(config.explorerUrl, sale.sale)} target="_blank" rel="noreferrer">
+                explorador
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td className="label">Token</td>
+            <td className="mono">{token}</td>
+            <td className="right">
+              <a href={explorerAddress(config.explorerUrl, token)} target="_blank" rel="noreferrer">
+                explorador
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td className="label">Owner</td>
+            <td className="mono">{owner}</td>
+            <td className="right mono">{shortAddress(owner)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Compradores (primeros {buyers.length})</h2>
+      {buyers.length === 0 ? (
+        <p className="lede">Todavía no hay compras.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Wallet</th>
+              <th className="right">Tokens</th>
+              <th className="right">POL pagado</th>
+              <th className="right">Consulta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {buyers.map((buyer) => (
+              <tr key={buyer.address}>
+                <td className="mono">{shortAddress(buyer.address)}</td>
+                <td className="right">{formatToken(buyer.tokens, decimals)}</td>
+                <td className="right">{formatPol(buyer.paid, 4)}</td>
+                <td className="right">
+                  <a href={`/wallet/?address=${buyer.address}`}>ver posición</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <footer>
+        <div className="row">
+          <a href="/wallet/">Consultar una wallet</a>
+          <span className="spacer" />
+          <span className="mono">
+            {sale.sale} · deploy block {sale.deployBlock}
+          </span>
+        </div>
+      </footer>
     </main>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 4,
-  padding: "16px 18px",
-  background: "var(--panel)",
-  border: "1px solid var(--border)",
-  borderRadius: 12,
-};
-
-const labelStyle: React.CSSProperties = {
-  color: "var(--muted)",
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-};
-
-const monoStyle: React.CSSProperties = {
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-  fontSize: 13,
-  color: "var(--muted)",
-};
-
-const rowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 12,
-  padding: "10px 14px",
-  background: "var(--panel)",
-  border: "1px solid var(--border)",
-  borderRadius: 10,
-};
-
-const badgeStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 26,
-  height: 26,
-  borderRadius: "50%",
-  fontSize: 13,
-  fontWeight: 600,
-  background: "#1b2431",
-  color: "var(--text)",
-};
-
-const badgeState: Record<(typeof phases)[number]["state"], React.CSSProperties> = {
-  done: { background: "var(--ok)", color: "#04120a" },
-  current: { background: "var(--accent)", color: "#fff" },
-  next: { background: "#1b2431", color: "var(--muted)" },
-};

@@ -430,19 +430,19 @@ GET /api/export.csv           -> export para conciliación
 
 | Ruta | Contenido |
 |---|---|
-| `/` | Dashboard + formulario de compra |
-| `/wallet/[address]` (o `?addr=`) | Consulta read-only de una wallet |
-| `/admin` (fase 4) | Pausa, precio, retirada, barrido; visible solo si `owner() == cuenta` |
+| `/` | Dashboard + formulario de compra (fase 4) |
+| `/wallet?address=0x…` | Consulta read-only de una wallet. Con exportación estática no se usan rutas dinámicas: la dirección va en query string y se valida contra la lista de despliegue |
+| `/admin` (fase 4) | Pausa, retirada y barrido; visible solo si `owner() == cuenta` |
 | `/legal` | Términos, privacidad y aviso de riesgo |
 
 ### 6.2 Dashboard: métricas
 
 - Nombre, símbolo, suministro total y dirección del token (con enlace a Polygonscan).
-- Precio actual en POL (y estimación EUR opcional, etiquetada).
+- Precio fijo en POL (inmutable) y estimación EUR informativa desde `polUsdRate`.
 - Tokens vendidos / restantes / **% vendido** (barra de progreso).
 - POL recaudado (y estimación EUR).
 - Nº de compradores.
-- **FDV** = precio × suministro; **valor vendido** = precio × vendidos (ambos con la salvedad de que el precio puede haber cambiado).
+- **FDV** = precio × suministro; **valor vendido** = precio × vendidos (exactos, porque el precio es inmutable).
 - Estado de la ventana (programada / activa / pausada / agotada / finalizada) y cuenta atrás.
 - Dirección del contrato de venta y del token, verificadas y enlazadas al explorador.
 - Tabla de últimas compras (paginada) y buscador por wallet.
@@ -469,17 +469,24 @@ GET /api/export.csv           -> export para conciliación
 
 ### 6.5 Configuración
 
-```env
-NEXT_PUBLIC_CHAIN_ID=80002
-NEXT_PUBLIC_SALE_ADDRESS=0x...
-NEXT_PUBLIC_TOKEN_ADDRESS=0x...
-NEXT_PUBLIC_RPC_URL=https://...
-NEXT_PUBLIC_WC_PROJECT_ID=...
+La configuración se carga **en tiempo de ejecución**: no se usan `NEXT_PUBLIC_*` (ADR-15).
+
+`/config.json`, generado por el entrypoint del contenedor:
+
+```json
+{ "env": "dev", "chainId": 31337, "rpcUrl": "http://127.0.0.1:8545", "explorerUrl": "", "polUsdRate": 0.1 }
 ```
 
-- Direcciones y ABI en `web/lib/deployments.ts`, generadas desde `deployments/<chainId>.json`; **nunca** se aceptan direcciones por query string para operar.
-- La clave del RPC, si es de proveedor, se restringe por dominio en el panel del proveedor; nunca se asume secreta.
-- En DEV hay dos URLs distintas para el mismo Anvil: el navegador usa `http://localhost:8545` (puerto publicado) y los contenedores usan `http://anvil:8545` (DNS interno). No mezclarlas en una sola variable: `NEXT_PUBLIC_RPC_URL` es para el navegador.
+`/deployment.json`, copia de `deployments/<entorno>.json`:
+
+```json
+{ "chainId": 31337, "sales": [{ "id": 1, "sale": "0x…", "token": "0x…", "owner": "0x…", "deployBlock": 0 }] }
+```
+
+- La web valida que `deployment.chainId === config.chainId` y que hay al menos una venta.
+- Las direcciones **nunca** se aceptan por query string para operar; `/wallet?address=` solo consulta.
+- En DEV el navegador usa `http://127.0.0.1:8545` (puerto publicado) y los contenedores `http://anvil:8545` (DNS interno). `rpcUrl` es siempre la URL del navegador.
+- Si el RPC es de un proveedor con clave, se restringe por dominio; nunca se asume secreta.
 
 ### 6.6 Manejo de errores
 
@@ -599,7 +606,7 @@ PRE y PRO comparten host mientras el proyecto sea un prototipo. Para producción
 |---|---|---|---|---|---|
 | `contracts` | `contracts/Dockerfile` (Foundry fijado) | ✔ | one-shot | one-shot | tests, `cast` y scripts de despliegue; perfil `tools` |
 | `anvil` | misma imagen Foundry | ✔ | — | — | nodo local; `--fork-url` opcional |
-| `web` | `web/Dockerfile` | ✔ (`target: dev`) | ✔ | ✔ | Next.js `standalone` |
+| `web` | `web/Dockerfile` | ✔ (`target: dev`) | ✔ | ✔ | export estático servido por Caddy; config en runtime |
 | `edge` | `caddy:2-alpine` fijado | — | ✔ | ✔ | TLS automático y routing por dominio |
 | `db` | `postgres:16-alpine` fijado | opcional | fase 4 | fase 4 | solo red interna |
 | `indexer` | `docker/indexer/Dockerfile` (Ponder) | opcional | fase 4 | fase 4 | solo fase 4 |
@@ -623,7 +630,7 @@ services:
       - internal
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/config.json"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -786,15 +793,16 @@ app.example.com {
 
 ### 8.5 Imágenes
 
-**Web** (`web/Dockerfile`, contexto `./web`): multi-stage `deps → dev → builder → runner`, Node 22 Alpine, pnpm por `corepack`, salida `standalone`, usuario non-root y healthcheck.
+**Web** (`web/Dockerfile`, contexto `./web`): `deps → dev` para desarrollo y `builder → runner`
+para producción. El runner es **Caddy + export estático** (`out/`), sin Node en runtime; el
+entrypoint genera `/srv/config.json` desde variables de entorno y copia el `deployment.json`
+montado (ADR-15). Los archivos reales son [`web/Dockerfile`](../web/Dockerfile) y
+[`web/docker/Caddyfile`](../web/docker/Caddyfile).
 
 ```dockerfile
-# web/Dockerfile
-# syntax=docker/dockerfile:1.7
 FROM node:22-alpine AS base
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@12.16.1 --activate
 WORKDIR /app
-ENV NEXT_TELEMETRY_DISABLED=1
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
@@ -805,26 +813,21 @@ COPY . .
 CMD ["pnpm", "dev"]
 
 FROM base AS builder
-ARG NEXT_PUBLIC_CHAIN_ID
-ARG NEXT_PUBLIC_SALE_ADDRESS
-ARG NEXT_PUBLIC_TOKEN_ADDRESS
-ARG NEXT_PUBLIC_RPC_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
 
-FROM base AS runner
-ENV NODE_ENV=production
-RUN addgroup -S app && adduser -S app -G app
-COPY --from=builder --chown=app:app /app/.next/standalone ./
-COPY --from=builder --chown=app:app /app/.next/static ./.next/static
-COPY --from=builder --chown=app:app /app/public ./public
-USER app
-EXPOSE 3000
-CMD ["node", "server.js"]
+FROM caddy:2-alpine AS runner
+COPY docker/Caddyfile /etc/caddy/Caddyfile
+COPY docker/entrypoint.sh /entrypoint.sh
+COPY --from=builder /app/out /srv
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
 ```
 
-> `next.config.ts` debe declarar `output: 'standalone'`. Las variables `NEXT_PUBLIC_*` **se incrustan en build**: PRE y PRO son dos builds del mismo commit (matriz de CI), no la misma imagen con distinto `.env`. Es el precio de no añadir un endpoint de configuración en runtime; para el prototipo es la opción más simple y explícita.
+> `next.config.ts` declara `output: 'export'` y `trailingSlash: true`. La misma imagen sirve
+> DEV, PRE y PRO cambiando `CHAIN_ID`, `RPC_URL` y el `deployment.json` montado: no hay
+> `NEXT_PUBLIC_*` ni dos builds por entorno. El healthcheck consulta `/config.json`.
 
 **Contratos** (`contracts/Dockerfile`): imagen oficial de Foundry fijada por versión y digest, usuario no-root y caché de `solc` en volumen.
 
@@ -855,14 +858,14 @@ ENV SVM_HOME=/home/app/.svm
 |---|---|---|
 | Clave del deployer | CI secret + `--keystore` montado en el contenedor one-shot | repositorio, imagen, VPS web |
 | Clave del owner | Safe multisig (firmantes con hardware wallet) | infraestructura |
-| RPC API key | `.env.pre`/`.env.pro` y restricción por dominio | `NEXT_PUBLIC_*` en claro sin restricción |
+| RPC API key | `.env.pre`/`.env.pro` y restricción por dominio | `config.json` servido sin restricción |
 | Password de Postgres | Docker secret | `compose.yaml` |
 | Hash de Basic Auth de PRE | `Caddyfile` (solo hash bcrypt) | texto plano |
 
 Reglas:
 
 - `.env.example` versionado **solo con nombres**; `.env.*` reales en `.gitignore` y `chmod 600`.
-- `NEXT_PUBLIC_*` es **público por definición** (acaba en el bundle). Nunca metas una clave secreta ahí. Si el proveedor de RPC no permite restringir por dominio, poner un proxy `/api/rpc` en el servidor Next y no exponer la clave.
+- Todo lo que llega al navegador es **público por definición**: `config.json` y el bundle. Nunca metas una clave secreta ahí. Si el proveedor de RPC no permite restringir por dominio, pon un proxy de RPC en el edge y no expongas la clave.
 - En PRO, `docker secret` para todo lo sensible; en PRE, `.env` con permisos restringidos es suficiente.
 - Rotación documentada: RPC key, deployer key (nueva cuenta), password de Postgres.
 
@@ -899,7 +902,7 @@ Flujo: **CI construye y publica en GHCR; el VPS solo hace `pull` y `up`.** Nunca
 | Pipeline | Disparo | Pasos | Puerta |
 |---|---|---|---|
 | `ci` | PR / push | `forge fmt --check`, `forge test`, lint, typecheck, `next build`, escaneo de imagen | obligatoria |
-| `images` | tag `v*` | buildx multi-arch y push `web:sha-<commit>`, `:pre`, `:pro` (dos builds por `NEXT_PUBLIC_*`) | — |
+| `images` | tag `v*` | buildx multi-arch y push `web:sha-<commit>`, `:pre`, `:pro` (misma imagen, distinta configuración) | — |
 | `deploy-pre` | tag o merge | `pull` + `up -d` en VPS PRE, smoke test HTTPS | automática |
 | `deploy-pro` | release manual | `pull` + `up -d` en VPS PRO | aprobación en GitHub Environments |
 | `deploy-contracts-pre` | manual | `forge script` en Amoy, publicar `deployments/80002.json` | aprobación |
@@ -952,7 +955,7 @@ WEB_IMAGE=ghcr.io/<org>/dapp-tk-web:sha-<commit> \
 
 - **Hardware wallet:** un Ledger no se pasa al contenedor. La firma con hardware wallet se hace con `cast` en un host endurecido o, preferiblemente, con `--keystore` en CI y aprobación manual. Es la única excepción documentada al “todo en Docker”.
 - **Rendimiento en macOS:** bind mounts y Anvil en contenedor son algo más lentos que en Linux; se mitiga con volúmenes nombrados y `WATCHPACK_POLLING`. No afecta a PRE/PRO.
-- **Build args públicos:** `NEXT_PUBLIC_*` obliga a dos builds (PRE y PRO) por release; se acepta para no añadir configuración en runtime.
+- **Configuración en runtime:** `config.json` y `deployment.json` se generan/copian al arrancar el contenedor; es la excepción al “todo inmutable” y se mitiga con `Cache-Control: no-store` y validación en el entrypoint.
 
 ### 8.12 Entorno local verificado (2026-10-30)
 
@@ -1040,14 +1043,18 @@ dapp-tk-basic/
 │   ├── package.json
 │   ├── app/
 │   │   ├── page.tsx
-│   │   ├── wallet/[address]/page.tsx
-│   │   └── admin/page.tsx
-│   ├── components/
+│   │   ├── layout.tsx
+│   │   ├── globals.css
+│   │   └── wallet/page.tsx
+│   ├── docker/
+│   │   ├── Caddyfile
+│   │   └── entrypoint.sh
 │   └── lib/
-│       ├── chains.ts
-│       ├── contracts.ts
-│       └── format-amount.ts
-├── docker/
+│       ├── abi.ts
+│       ├── chain.ts
+│       ├── format.ts
+│       └── runtime.ts
+├── docker/                  # edge de PRE/PRO (fase 5)
 │   └── Caddyfile
 ├── deployments/
 │   ├── dev.json

@@ -76,7 +76,7 @@ Reglas adicionales:
 
 | Elemento | Convención | Ejemplo |
 |---|---|---|
-| Variable pública de Next | `NEXT_PUBLIC_` + `UPPER_SNAKE` | `NEXT_PUBLIC_CHAIN_ID` |
+| Variable del contenedor web | `UPPER_SNAKE` | `CHAIN_ID`, `RPC_URL`, `EXPLORER_URL`, `POL_USD_RATE` |
 | RPC / API | `UPPER_SNAKE` con proveedor | `ETH_RPC_URL`, `POLYGONSCAN_API_KEY` |
 | Servicio Compose | `kebab-case` | `web`, `contracts`, `edge`, `db`, `indexer` |
 | Imagen | `ghcr.io/<org>/dapp-tk-<servicio>:<tag>` | `ghcr.io/acme/dapp-tk-web:sha-abc123` |

@@ -22,6 +22,13 @@ el versionado [Semantic Versioning](https://semver.org/lang/es/).
   (submodules y `foundry.lock`), 38 tests unitarios/fuzz/invariantes, `Deploy.s.sol`,
   `deployments/dev.json`, `make deploy-local`/`check-local`/`e2e`, imagen de contratos
   con UID/GID del host y job E2E en CI.
+- **Fase 3:** dashboard estático (Next `output: "export"`) con viem, configuración en runtime
+  (`/config.json`, `/deployment.json`), consulta por wallet en `/wallet?address=`, imagen
+  Caddy con cabeceras de seguridad y healthcheck en `/config.json`.
+
+### Changed
+
+- La imagen web pasa de Next standalone (Node en runtime) a export estático servido por Caddy.
 
 ## [0.1.0] - 2026-10-30
 

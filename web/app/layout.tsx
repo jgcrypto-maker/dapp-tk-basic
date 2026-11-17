@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "dapp-tk-basic",
-  description: "Prototipo de venta de token ERC-20 sobre Polygon",
+  description: "Venta de un token ERC-20 a precio fijo en POL sobre Polygon",
 };
 
 export const viewport: Viewport = {

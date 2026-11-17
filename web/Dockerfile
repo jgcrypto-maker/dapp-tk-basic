@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1.7
-# Web image: multi-stage (base → deps → dev / builder → runner).
-# Pin NODE_IMAGE to a digest for reproducible builds (see docs/ENVIRONMENT.md).
+# Web image: static export served by Caddy, configuration injected at runtime (ADR-15).
+# The same image is promoted across DEV, PRE and PRO.
 
 ARG NODE_IMAGE=node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914
+ARG CADDY_IMAGE=caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
 
 FROM ${NODE_IMAGE} AS base
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -21,27 +22,15 @@ EXPOSE 3000
 CMD ["pnpm", "dev"]
 
 FROM base AS builder
-ARG NEXT_PUBLIC_CHAIN_ID=31337
-ARG NEXT_PUBLIC_RPC_URL=http://127.0.0.1:8545
-ARG NEXT_PUBLIC_SALE_ADDRESS=0x0000000000000000000000000000000000000000
-ARG NEXT_PUBLIC_TOKEN_ADDRESS=0x0000000000000000000000000000000000000000
-ENV NEXT_PUBLIC_CHAIN_ID=${NEXT_PUBLIC_CHAIN_ID} \
-    NEXT_PUBLIC_RPC_URL=${NEXT_PUBLIC_RPC_URL} \
-    NEXT_PUBLIC_SALE_ADDRESS=${NEXT_PUBLIC_SALE_ADDRESS} \
-    NEXT_PUBLIC_TOKEN_ADDRESS=${NEXT_PUBLIC_TOKEN_ADDRESS}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
 
-FROM base AS runner
-ENV NODE_ENV=production
-RUN addgroup -S app && adduser -S app -G app
-WORKDIR /app
-COPY --from=builder --chown=app:app /app/.next/standalone ./
-COPY --from=builder --chown=app:app /app/.next/static ./.next/static
-COPY --from=builder --chown=app:app /app/public ./public
-USER app
+FROM ${CADDY_IMAGE} AS runner
+COPY docker/Caddyfile /etc/caddy/Caddyfile
+COPY docker/entrypoint.sh /entrypoint.sh
+COPY --from=builder /app/out /srv
+RUN chmod +x /entrypoint.sh
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
-    CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
-CMD ["node", "server.js"]
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

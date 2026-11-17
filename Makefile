@@ -97,6 +97,8 @@ chain: ## Start only Anvil and wait until healthy
 deploy-local: chain ## Deploy the sale on Anvil and write deployments/dev.json
 	$(COMPOSE) $(TOOLS) run --rm --build contracts script script/Deploy.s.sol \
 		--rpc-url $(ANVIL_RPC) --broadcast --unlocked --sender $(DEV_SENDER)
+	@cp deployments/dev.json web/public/deployment.json
+	@echo "deployments/dev.json -> web/public/deployment.json"
 
 check-local: ## Verify the deployed sale on Anvil
 	$(COMPOSE) $(TOOLS) run --rm --build --workdir /workspace --entrypoint sh \
