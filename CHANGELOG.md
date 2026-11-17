@@ -6,10 +6,20 @@ el versionado [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Changed
+
+- Modelo on-chain revisado tras comparar con el prototipo predecesor: el `TokenSale` crea su
+  propio `SaleToken` en el constructor y reparte inventario/tesorería (ADR-02 y ADR-14);
+  precio y ventana pasan a ser **inmutables** (ADR-03); `quote` redondea al alza;
+  `getBuyers` limita a 100 entradas por página; se añaden contadores de retiradas y barridos.
+- `buyFor` aplazado (D16): la compra es siempre para `msg.sender`.
+- Web: exportación estática con configuración en tiempo de ejecución (ADR-15, D17),
+  pendiente de implementar en la fase 3.
+
 ### Added
 
-- **Fase 2 (pendiente):** `SaleToken`, `TokenSale`, tests unitarios/fuzz/invariantes,
-  script de despliegue y `deployments/80002.json` en Polygon Amoy.
+- **Fase 2 (en curso):** `SaleToken`, `TokenSale`, tests unitarios/fuzz/invariantes,
+  script de despliegue y `deployments/<entorno>.json`.
 
 ## [0.1.0] - 2026-10-30
 

@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Versión** | 0.6 |
-| **Fecha** | 2026-10-30 (rev. 2026-11-16) |
-| **Estado** | Fase 1 completada y decisiones de la §15 cerradas. Repositorio organizado para alojamiento privado en GitHub. Fase 2 lista para Amoy. |
+| **Versión** | 0.7 |
+| **Fecha** | 2026-10-30 (rev. 2026-11-17) |
+| **Estado** | Fase 1 completada y decisiones cerradas. Diseño de contratos revisado tras comparar con el prototipo predecesor: token creado por la venta, precio y ventana inmutables. Fase 2 en marcha hacia Amoy. |
 | **Red objetivo** | Polygon PoS (`chainId 137`) · pruebas en Polygon Amoy (`chainId 80002`) |
 | **Alcance** | Prototipo de venta primaria de un token ERC-20 a precio fijo en POL + panel público de estado y distribución |
 | **Cambios v0.2** | Docker-first (host solo con Docker), entornos DEV/PRE/PRO y convenciones de nombrado (archivos y código en inglés, documentación en español) |
@@ -12,6 +12,7 @@
 | **Cambios v0.4** | Fase 1 implementada: `compose*.yaml`, Dockerfiles con digest, `Makefile` compatible con 3.81, CI base y smoke tests; árbol de repositorio anotado con lo que existe y lo que queda por fase |
 | **Cambios v0.5** | §15 cerrada: D1–D15 aceptadas con valores concretos (precio 0,01 POL/TK con tope 0,05; límites en tokens 1.000/100.000; Amoy como red de pruebas); §11 actualizado |
 | **Cambios v0.6** | Organización del repositorio: `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, plantillas de issue/PR, `CODEOWNERS`, Dependabot, `.editorconfig`/`.gitattributes` y verificación de enlaces en CI |
+| **Cambios v0.7** | Revisión del modelo on-chain tras analizar el prototipo predecesor: ADR-02/14 (token creado por la venta, reparto inventario/tesorería), ADR-03 (precio y ventana inmutables), ADR-15 (web estática con configuración en runtime), `quote` con redondeo al alza, `MAX_PAGE`, contadores de retiradas/barridos, `buyFor` aplazado (§4 y §15 reescritas) |
 
 ---
 
@@ -54,7 +55,7 @@ Hay que separar la UI en dos operaciones distintas:
 | **Consultar** | dirección `0x…` | lee `tokensPurchasedBy`, `weiPaidBy` | No |
 | **Comprar** | wallet conectada + importe | `buy()` payable | Sí, la wallet conectada |
 
-Si se permite teclear una dirección distinta de la conectada, el significado correcto es **“regalar tokens a esa dirección”** (`buyFor`): paga `msg.sender`, recibe el `receiver`. Es una función legítima, pero debe mostrarse claramente en el modal de confirmación para evitar regalos accidentales (o malware de portapapeles).
+Teclear una dirección distinta de la conectada solo tiene sentido como **“regalar tokens a esa dirección”** (`buyFor`): pagaría `msg.sender` y recibiría el `receiver`. Es una función legítima, pero añade superficie (validación de receptor, a quién aplicar el tope, confirmación explícita) y por eso **queda aplazada** (§15, D16). En el prototipo la compra siempre es para la wallet conectada.
 
 ### 1.3 “Tokens distribuidos entre wallets” puede significar tres cosas
 
@@ -77,7 +78,7 @@ Para el prototipo: **precio fijo en POL**, estimación EUR solo informativa (y e
 
 ### 1.5 “Wallet del contrato original” obliga a decidir dónde vive el inventario
 
-Si los tokens están en la EOA del propietario, el contrato no puede venderlos salvo con `approve` + `transferFrom`, lo que añade pasos y confianza. Diseño propuesto: **el suministro se emite una sola vez al desplegar y el inventario se transfiere al `TokenSale`**. “Cuánto queda” = `token.balanceOf(sale)`, verificable por cualquiera.
+Si los tokens están en la EOA del propietario, el contrato no puede venderlos salvo con `approve` + `transferFrom`, lo que añade pasos y confianza. Diseño aceptado (ADR-02, ADR-14): **el `TokenSale` crea su propio `SaleToken` en el constructor**, acuña el inventario directamente en la venta y reserva el resto para tesorería. Un solo despliegue atómico, sin `approve` ni transferencias previas. “Cuánto queda” = `token.balanceOf(sale)`, verificable por cualquiera.
 
 ### 1.6 Faltan en el alcance: reembolsos, límites, allowlist y legal
 
@@ -90,8 +91,8 @@ No están definidos y cambian el contrato: ¿devoluciones?, ¿mínimo/máximo po
 | ID | Decisión | Alternativa descartada | Motivo |
 |---|---|---|---|
 | **ADR-01** | Token **ERC-20 nuevo**, 18 decimales, suministro fijo, sin función `mint` | Token existente / ERC-721 | Control total y despliegue reproducible; el enunciado habla de tokens fraccionables |
-| **ADR-02** | Contrato **`TokenSale` dedicado** que custodia el inventario | Vender desde la EOA con `transferFrom` | Precio y límites aplicados on-chain; estado consultable; sin firmas manuales por venta |
-| **ADR-03** | Precio **fijo en POL** (wei) on-chain, mutable por el owner con tope y evento | Oráculo EUR/USD on-chain | Determinista y simple; el EUR es presentación |
+| **ADR-02** | Contrato **`TokenSale` autocontenido**: **crea su propio `SaleToken`** en el constructor, recibe el inventario y reserva el resto para tesorería | Token externo con `approve`/`transferFrom`; vender desde la EOA | Despliegue atómico, sin ventana sin inventario, token estándar garantizado |
+| **ADR-03** | Precio **fijo e inmutable** en POL (wei por token) y ventana **inmutable** | Precio mutable con tope; oráculo EUR/USD | El inversor sabe lo que firma; elimina `setPrice`, el tope y el riesgo de cambio; el EUR es presentación |
 | **ADR-04** | **Contabilidad on-chain + enumeración paginada** de compradores | Indexer desde el día 1 | Cero infraestructura; suficiente para el prototipo; migrable sin cambiar el contrato |
 | **ADR-05** | **Sin backend propio** en fases 1–3 | API + base de datos | Menos superficie de ataque y coste; RPC + contrato bastan |
 | **ADR-06** | Contratos **inmutables** (sin proxy) | UUPS / Transparent Proxy | Auditabilidad y simplicidad; si hace falta actualizar, se redespliega y se migra |
@@ -102,6 +103,8 @@ No están definidos y cambian el contrato: ¿devoluciones?, ¿mínimo/máximo po
 | **ADR-11** | **Docker-first**: todo el toolchain en contenedores; el host solo necesita Docker + Compose | Instalar Foundry/Node en cada máquina | Paridad DEV/PRE/PRO, onboarding reproducible y traslado directo al VPS |
 | **ADR-12** | **Un proyecto Compose por entorno** (`dapp-pre`, `dapp-pro`) + edge compartido | Un único Compose con perfiles para todo | Aislamiento, despliegue y rollback independientes por entorno |
 | **ADR-13** | **Archivos y código en inglés; documentación en español** | Mezclar idiomas | Consistencia con el ecosistema, `grep` predecible y onboarding más rápido |
+| **ADR-14** | **Token creado por la venta** y reparto explícito inventario/tesorería en el constructor | Acuñar todo al deployer y transferir después | Un solo despliegue atómico y suministro auditable |
+| **ADR-15** | Web con **exportación estática** y configuración en tiempo de ejecución (`/config.json`, `/deployment.json`) servida por Caddy | `NEXT_PUBLIC_*` incrustadas en build | Una sola imagen promovible DEV→PRE→PRO, sin Node en runtime (fase 3) |
 
 ### Stack concreto
 
@@ -159,43 +162,70 @@ flowchart LR
 
 ### 4.1 `SaleToken.sol`
 
-ERC-20 estándar con:
+ERC-20 de suministro fijo que **despliega el propio `TokenSale`** en su constructor (ADR-02):
 
 - `name`, `symbol`, `decimals = 18`.
-- `constructor(uint256 initialSupply, address treasury)` → `_mint(treasury, initialSupply)`.
-- **Sin `mint` posterior** (suministro inmutable), sin `burn`, sin fees, sin `permit` (no hace falta).
-- Hereda de OpenZeppelin `ERC20`; no se toca la lógica de transferencias.
+- `constructor(name, symbol, totalSupply, inventoryHolder, inventory, treasury)`:
+  - `_mint(inventoryHolder, inventory)`: el inventario nace ya dentro del contrato de venta.
+  - `_mint(treasury, totalSupply - inventory)` si hay tokens reservados.
+- **Sin `mint` posterior**, sin `burn`, sin fees, sin `permit` y sin `owner`.
+- Errores: `InvalidSupply` y `ZeroAddress`.
 
-> El despliegue emite el 100 % del suministro al deployer; el script transfiere el inventario al `TokenSale` en la misma transacción de despliegue (§8.8). Lo que no se venda se queda en el `TokenSale` hasta el barrido posterior al cierre.
+> El despliegue es atómico: una sola transacción crea token y venta. No hay `approve`, ni
+> `transferFrom`, ni un instante en el que la venta exista sin inventario. Con
+> `inventory = totalSupply` la tesorería queda a cero; con `inventory < totalSupply` el resto
+> se reserva para tesorería sin cambiar el contrato.
 
-### 4.2 Estado del `TokenSale`
+### 4.2 Parámetros y estado del `TokenSale`
 
 ```solidity
-// Identidad e inventario
-IERC20  public immutable token;
-uint8   public immutable tokenDecimals;   // 18, cacheado
-uint256 public immutable totalSupply;     // leído en el constructor
+struct SaleConfig {
+    string  name;
+    string  symbol;
+    uint256 totalSupply;          // unidades mínimas (18 decimales)
+    uint256 inventory;            // tokens a la venta, <= totalSupply
+    address treasury;             // recibe totalSupply - inventory
+    uint256 pricePerTokenWei;     // inmutable
+    uint64  startTime;            // inmutable
+    uint64  endTime;              // inmutable
+    uint256 minTokensPerPurchase;
+    uint256 maxTokensPerWallet;   // 0 = sin límite
+    address owner;
+}
+```
 
-// Economía
-uint256 public pricePerTokenWei;          // wei de POL por 1 token entero (1e18 unidades)
-uint256 public maxPricePerTokenWei;       // tope defensivo de setPrice
-uint256 public minTokensPerPurchase;
-uint256 public maxTokensPerWallet;        // 0 = sin límite
-uint64  public startTime;
-uint64  public endTime;
+```solidity
+// Identidad e inventario (todo inmutable)
+SaleToken public immutable token;          // creado en el constructor
+uint256   public immutable inventory;
+uint256   public immutable pricePerTokenWei;
+uint64    public immutable startTime;
+uint64    public immutable endTime;
+uint256   public immutable minTokensPerPurchase;
+uint256   public immutable maxTokensPerWallet;
 
 // Contabilidad
 uint256 public totalTokensSold;
 uint256 public totalRaisedWei;
-uint256 public buyerCount;
+uint256 public totalWithdrawnWei;
+uint256 public totalSweptTokens;
 
 mapping(address => uint256) public tokensPurchasedBy;
 mapping(address => uint256) public weiPaidBy;
-mapping(address => bool)    private _isBuyer;
 address[] private _buyers;
+
+uint256 public constant MAX_PAGE = 100;
 ```
 
-**Por qué `weiPaidBy`:** si el precio cambia, el POL pagado por cada wallet **no** se puede derivar de los tokens comprados. Guardarlo por separado mantiene el dashboard exacto y permite conciliar `sum(weiPaidBy) == totalRaisedWei`.
+**Validación del constructor** (`InvalidConfig`): `pricePerTokenWei > 0`,
+`0 < inventory <= totalSupply`, `0 < minTokensPerPurchase <= inventory`,
+`maxTokensPerWallet == 0 || maxTokensPerWallet >= minTokensPerPurchase`,
+`startTime < endTime`, `endTime > block.timestamp`, `owner != address(0)` y
+`treasury != address(0)`. `totalSupply` se lee del propio token (`token.totalSupply()`).
+
+**Por qué `weiPaidBy`:** el redondeo al alza es por compra, así que
+`quote(a) + quote(b) >= quote(a + b)`. Guardar el POL pagado por wallet mantiene la
+conciliación exacta `sum(weiPaidBy) == totalRaisedWei` y el dashboard sin derivar.
 
 ### 4.3 Interfaz pública (ABI de referencia)
 
@@ -203,37 +233,35 @@ address[] private _buyers;
 interface ITokenSale {
     struct SaleState {
         address token;
-        uint8   tokenDecimals;
-        uint256 pricePerTokenWei;
         uint256 totalSupply;
+        uint256 inventory;
         uint256 remainingTokens;   // balance del contrato de venta
         uint256 totalTokensSold;
         uint256 totalRaisedWei;
+        uint256 withdrawableWei;   // POL disponible ahora
+        uint256 totalWithdrawnWei;
+        uint256 totalSweptTokens;
         uint256 buyerCount;
+        uint256 pricePerTokenWei;
         uint64  startTime;
         uint64  endTime;
         bool    paused;
+        address owner;
     }
 
-    event TokensPurchased(
-        address indexed buyer,
-        address indexed receiver,
-        uint256 tokenAmount,
-        uint256 paidWei
-    );
-    event PriceUpdated(uint256 oldPriceWei, uint256 newPriceWei);
-    event SaleWindowUpdated(uint64 startTime, uint64 endTime);
+    event TokensPurchased(address indexed buyer, uint256 tokenAmount, uint256 paidWei);
     event ProceedsWithdrawn(address indexed to, uint256 amountWei);
     event UnsoldSwept(address indexed to, uint256 tokenAmount);
+    event ForeignTokenSwept(address indexed token, address indexed to, uint256 amount);
 
     // --- Usuario ---
     function buy(uint256 tokenAmount) external payable;
-    function buyFor(address receiver, uint256 tokenAmount) external payable;
 
     // --- Lectura ---
     function quote(uint256 tokenAmount) external view returns (uint256 costWei);
     function saleState() external view returns (SaleState memory);
     function remainingTokens() external view returns (uint256);
+    function buyerCount() external view returns (uint256);
     function tokensPurchasedBy(address buyer) external view returns (uint256);
     function weiPaidBy(address buyer) external view returns (uint256);
     function getBuyers(uint256 offset, uint256 limit)
@@ -241,8 +269,6 @@ interface ITokenSale {
         returns (address[] memory buyers, uint256[] memory tokenAmounts, uint256[] memory paidWei);
 
     // --- Owner ---
-    function setPrice(uint256 newPriceWei) external;
-    function setSaleWindow(uint64 startTime, uint64 endTime) external;
     function pause() external;
     function unpause() external;
     function withdrawProceeds(address payable to) external;
@@ -251,22 +277,28 @@ interface ITokenSale {
 }
 ```
 
+> `buyFor` (comprar para otra wallet) queda **aplazado** (§15, D16): la compra siempre es
+> para `msg.sender`. Elimina la validación de receptor y las dudas de a quién aplicar el
+> tope por wallet.
+
 ### 4.4 Reglas de `buy` (orden exacto de validación)
 
-1. `whenNotPaused`.
+1. `!paused()`.
 2. `block.timestamp >= startTime` y `block.timestamp <= endTime`.
 3. `tokenAmount > 0` y `tokenAmount >= minTokensPerPurchase`.
 4. `tokenAmount <= remainingTokens()` (si no: `SoldOut`).
-5. `receiver != address(0)` y `receiver != address(this)` (si no: `InvalidReceiver`).
-6. `tokensPurchasedBy[receiver] + tokenAmount <= maxTokensPerWallet` (si el límite es > 0).
-7. `cost = quote(tokenAmount)` y `msg.value == cost` (sin reembolsos parciales; el exceso revierte).
-8. **Checks-Effects-Interactions:** actualizar `tokensPurchasedBy`, `weiPaidBy`, `totalTokensSold`, `totalRaisedWei`, `buyerCount`, `_buyers`.
-9. `token.safeTransfer(receiver, tokenAmount)`.
-10. `emit TokensPurchased(msg.sender, receiver, tokenAmount, cost)`.
+5. `tokensPurchasedBy[msg.sender] + tokenAmount <= maxTokensPerWallet` (si el límite es > 0).
+6. `cost = quote(tokenAmount)` y `msg.value == cost` (sin reembolsos parciales; el exceso revierte).
+7. **Checks-Effects-Interactions:** actualizar `tokensPurchasedBy`, `weiPaidBy`, `totalTokensSold`, `totalRaisedWei` y `_buyers` si es su primera compra.
+8. `token.safeTransfer(msg.sender, tokenAmount)`.
+9. `emit TokensPurchased(msg.sender, tokenAmount, cost)`.
 
-`quote(amount) = Math.mulDiv(amount, pricePerTokenWei, 10 ** tokenDecimals)`.
+`quote(amount) = Math.mulDiv(amount, pricePerTokenWei, 1e18, Math.Rounding.Ceil)`.
 
-> Redondeo: `mulDiv` trunca a favor del comprador por menos de 1 wei. Aceptable y documentado; los tests lo cubren.
+> **Redondeo al alza:** el comprador paga como máximo 1 wei de más por compra, se evitan
+> ventas a coste cero por dust y se garantiza `cost * 1e18 >= amount * price`. Efecto
+> secundario: `quote(a) + quote(b) >= quote(a + b)`, por eso el contrato guarda el POL
+> pagado por wallet en lugar de derivarlo.
 
 ### 4.5 Errores personalizados
 
@@ -274,29 +306,29 @@ interface ITokenSale {
 error SalePaused();
 error SaleNotStarted();
 error SaleEnded();
+error SaleNotEnded();
 error ZeroAmount();
 error BelowMinimum(uint256 minimum);
 error SoldOut();
 error AboveWalletCap(uint256 cap);
 error IncorrectPayment(uint256 expectedWei, uint256 receivedWei);
-error InvalidReceiver();
-error InvalidPrice();
-error InvalidWindow();
-error SaleNotEnded();
+error InvalidConfig();
 error InvalidToken();
 error TransferFailed();
+error ZeroAddress();
 ```
 
 Los mensajes de la UI se mapean desde estos selectores, no desde textos de RPC.
 
 ### 4.6 Invariantes (verificables con tests)
 
-1. `token.balanceOf(sale) + totalTokensSold == totalSupply` (sin transferencias externas al contrato).
+1. `token.balanceOf(sale) + totalTokensSold + totalSweptTokens == inventory`.
 2. `sum(weiPaidBy[buyer]) == totalRaisedWei`.
 3. `sum(tokensPurchasedBy[buyer]) == totalTokensSold`.
 4. `buyerCount == _buyers.length` y cada dirección aparece una sola vez.
-5. Ninguna compra fuera de `[startTime, endTime]`, en pausa, por encima del cap o con `msg.value` distinto de `quote`.
-6. `totalTokensSold <= totalSupply` **siempre**.
+5. `address(sale).balance == totalRaisedWei - totalWithdrawnWei`.
+6. Ninguna compra fuera de `[startTime, endTime]`, en pausa, por encima del cap o con `msg.value` distinto de `quote`.
+7. `totalTokensSold <= inventory` y `token.totalSupply()` constante.
 
 ### 4.7 Estados de la venta
 
@@ -329,14 +361,15 @@ resto                         -> ACTIVA
 
 | Función | Quién | Guardas | Efecto |
 |---|---|---|---|
-| `setPrice` | owner | `0 < newPrice <= maxPrice`, evento | Cambia el precio de las compras futuras |
-| `setSaleWindow` | owner | `start < end`, evento | Ajusta la ventana |
 | `pause` / `unpause` | owner | `Pausable` | Bloquea compras (no retiradas) |
-| `withdrawProceeds(to)` | owner | `to != 0`, `nonReentrant`, evento | Envía todo el POL del contrato |
-| `sweepUnsold(to)` | owner | `now > endTime`, `to != 0`, evento | Envía los tokens no vendidos |
-| `sweepForeignToken` | owner | `otherToken != token` | Recupera ERC-20 enviados por error |
+| `withdrawProceeds(to)` | owner | `to != 0`, `nonReentrant`, evento | Envía todo el POL del contrato y suma a `totalWithdrawnWei` |
+| `sweepUnsold(to)` | owner | `now > endTime`, `to != 0`, evento | Envía los tokens no vendidos y suma a `totalSweptTokens` |
+| `sweepForeignToken(other, to)` | owner | `other != token`, `to != 0`, evento | Recupera ERC-20 enviados por error |
 
-> **Riesgo inherente:** el owner puede retirar la recaudación y cambiar el precio. No es un bug, es un modelo de confianza. Se mitiga con Safe multisig, eventos y, si el cliente lo exige, con un `beneficiary` inmutable y precio congelado (variante del contrato, no del prototipo).
+> **Modelo de confianza:** con precio, ventana y suministro inmutables, el owner **no puede**
+> cambiar el precio, mintear, congelar saldos ni mover tokens ya entregados. **Sí puede**
+> pausar indefinidamente y retirar la recaudación; es inherente a una venta y se mitiga con
+> Safe multisig en mainnet, eventos y aviso al inversor.
 
 ---
 
@@ -418,7 +451,7 @@ GET /api/export.csv           -> export para conciliación
 
 1. **Conectar wallet** (RainbowKit). Si la red no es Polygon/Amoy, mostrar botón “Cambiar a Polygon” (`wallet_switchEthereumChain`).
 2. **Leer estado** con `saleState()`. Si no está activa, deshabilitar el formulario con el motivo.
-3. **Introducir cantidad** (en POL o en tokens, con toggle) y, opcionalmente, **dirección destino** distinta de la conectada (`buyFor`).
+3. **Introducir cantidad** (en POL o en tokens, con toggle). La compra es siempre para la wallet conectada (`buyFor` está aplazado).
 4. **Calcular** `quote()` en vivo; mostrar precio unitario, total y comisión de gas estimada.
 5. **Validar**: dirección con checksum (`getAddress`/`isAddress`), saldo suficiente para importe + gas, límites de la ventana.
 6. **Simular** con `simulateContract` antes de firmar. Si revierte, mostrar el error mapeado y no abrir la wallet.
@@ -489,15 +522,15 @@ Los errores se decodifican con el ABI (`decodeErrorResult`) para no mostrar mens
 ### 7.2 Controles en el contrato (checklist)
 
 - [ ] OpenZeppelin 5.x: `Ownable2Step`, `Pausable`, `ReentrancyGuard`, `SafeERC20`, `Math.mulDiv`.
-- [ ] CEI en `buy` / `buyFor`; `nonReentrant` en `buy`, `buyFor`, `withdrawProceeds`.
+- [ ] CEI en `buy`; `nonReentrant` en `buy` y `withdrawProceeds`.
 - [ ] `msg.value` exacto (sin reembolsos parciales) y validación de todos los límites.
-- [ ] `buyerCount` y `_buyers` sin duplicados (`_isBuyer`).
+- [ ] Contadores `totalTokensSold`, `totalRaisedWei`, `totalWithdrawnWei`, `totalSweptTokens` y `_buyers` sin duplicados.
 - [ ] `withdrawProceeds` y `sweepUnsold` solo owner, con evento y destino no nulo.
 - [ ] `sweepUnsold` solo después de `endTime`.
 - [ ] Sin `receive()`/`fallback()` genéricos; solo `buy` es payable.
 - [ ] Sin `delegatecall`, sin `selfdestruct`, sin `tx.origin`.
 - [ ] Token sin fees de transferencia, sin rebasing y sin `mint` posterior.
-- [ ] `maxPricePerTokenWei` como cota dura de `setPrice`.
+- [ ] Precio, ventana e inventario `immutable`; sin `setPrice` ni `setSaleWindow`.
 - [ ] Tests unitarios + fuzz + invariantes + fork de Amoy.
 - [ ] Verificación en Polygonscan + Sourcify; ownership a Safe antes de mainnet.
 
@@ -1073,7 +1106,7 @@ dapp-tk-basic/
 
 **Total prototipo en Amoy: ~9–13 días de desarrollo.**
 
-**Estado a 2026-10-30:** fases 0 y 1 completadas (arquitectura, entorno verificado y toolchain Docker funcionando) y §15 cerrada. Siguiente: fase 2 (contratos) contra Amoy.
+**Estado a 2026-11-17:** fases 0 y 1 completadas, §15 cerrada y diseño on-chain revisado (v0.7). **Fase 2 en marcha**: contratos, tests y despliegue en Amoy.
 
 ### Fuera de alcance (explícito)
 
@@ -1151,11 +1184,11 @@ Todas las preguntas de la v0.4 quedan aceptadas con los valores de abajo. Esta t
 
 | # | Decisión | Valor aceptado | Dónde se aplica |
 |---|---|---|---|
-| D1 | Token | **Nuevo ERC-20** `SaleToken`, 18 decimales, 1.000.000 TK | `SaleToken.sol`, constructor |
-| D2 | Precio | **0,01 POL/TK** (`1e16` wei), mutable por el owner con **tope 0,05 POL/TK** (`5e16` wei) | `pricePerTokenWei`, `MAX_PRICE_PER_TOKEN_WEI`, `setPrice` |
+| D1 | Token | **Nuevo ERC-20** `SaleToken`, 18 decimales, 1.000.000 TK; el despliegue del prototipo usa `inventory = totalSupply` (100 % a la venta) | `SaleToken.sol`, constructor |
+| D2 | Precio | **0,01 POL/TK** (`1e16` wei), **inmutable**; sin `setPrice` ni tope | `pricePerTokenWei` (`immutable`) |
 | D3 | “Distribución” | **A: ventas de esta DApp**; B/C con indexer en fase 4 | `tokensPurchasedBy`, `getBuyers` |
 | D4 | Límites | **En unidades de token**: mínimo **1.000 TK**, máximo **100.000 TK por wallet** (equivalen a 10 POL y 1.000 POL al precio inicial) | `minTokensPerPurchase`, `maxTokensPerWallet` |
-| D5 | Ventana | **Inicio en el despliegue, 30 días** de duración | `startTime`, `endTime` |
+| D5 | Ventana | **Inicio en el despliegue, 30 días** de duración, **inmutable** | `startTime`, `endTime` (`immutable`) |
 | D6 | Red | **Polygon Amoy (`80002`)** para el prototipo; mainnet tras checklist | `script/Deploy.s.sol`, `deployments/80002.json` |
 | D7 | Owner | **EOA** en Amoy (`Ownable2Step`); **Safe** en mainnet | constructor + `transferOwnership` |
 | D8 | Indexer | **No** hasta fase 4 | — |
@@ -1166,13 +1199,18 @@ Todas las preguntas de la v0.4 quedan aceptadas con los valores de abajo. Esta t
 | D13 | VPS | **Uno** para el prototipo | fase 5 |
 | D14 | Basic Auth en PRE | **Sí** | fase 5 |
 | D15 | Versiones | Docker 29.9.1 / Compose 5.6.0 / buildx 0.38.0; Node 22; Foundry v1.5.1; OpenZeppelin 5.x; Renovate | imágenes y CI |
+| D16 | `buyFor` (comprar para otra wallet) | **Aplazado** a fase 4/6; la compra es siempre para `msg.sender` | §4.3 |
+| D17 | Configuración de la web | **Runtime** (`/config.json` + `/deployment.json`) con exportación estática (ADR-15); se implementa en fase 3 | fase 3 |
 
 **Precisiones respecto a los defaults de la v0.4** (huecos detectados al planificar la Fase 2):
 
-- **D2**: el default decía “configurable con tope” sin cifra. Se fija el tope en **5× el precio inicial** (`0,05 POL/TK`): protege de un cambio accidental o malicioso sin impedir ajustes razonables.
-- **D4**: el default estaba en POL, pero el contrato valida en tokens. Se fija en **unidades de token** para que el límite no cambie al mover el precio; la UI mostrará el equivalente en POL.
+- **D2**: pasa de “mutable con tope” a **inmutable**. La comparación con el prototipo predecesor mostró que el precio mutable da poder al owner sin necesidad, complica el mensaje al inversor y obliga a un tope arbitrario; el pago exacto ya protege la firma. Cambiar el precio exige redesplegar.
+- **D5**: la ventana también es **inmutable**, por la misma razón. Reprogamar una venta exige redesplegar; para el prototipo es aceptable.
+- **D4**: el default estaba en POL, pero el contrato valida en tokens. Se fija en **unidades de token** para que el límite no cambie con el precio; la UI mostrará el equivalente en POL.
 - **D3** ya estaba implícita en ADR-04: se confirma que el contrato es el libro contable y no se añade indexer.
+- **D16**: `buyFor` se aplaza. Elimina la validación de receptor y la ambigüedad de a quién aplicar el tope por wallet.
+- **D17**: la configuración en runtime se implementará con el dashboard (fase 3); no cambia los contratos.
 
-**Decisiones que la Fase 2 asume del diseño de la §4.3:** `buyFor` (comprar para otra wallet), `sweepUnsold` (retirar lo no vendido tras el cierre), `withdrawProceeds` (retirar la recaudación) y pausa por el owner.
+**Decisiones que la Fase 2 asume del diseño de la §4:** `sweepUnsold` (retirar lo no vendido tras el cierre), `withdrawProceeds` (retirar la recaudación) y pausa por el owner.
 
 **Despliegue en Amoy:** el broadcast real necesita una clave con POL de prueba y un RPC de Amoy (p. ej. `https://polygon-amoy-bor-rpc.publicnode.com`). Sin esas credenciales, la Fase 2 se valida con `forge test` y una simulación contra Anvil; el script queda listo para el broadcast cuando el owner lo autorice.
